@@ -1,0 +1,3076 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAD 횡단면도 멀티 측점 설계기 및 DXF 내보내기 프로그램</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter & Noto Sans KR 로드 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome 아이콘 로드 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            user-select: none;
+        }
+        /* CAD 스타일 격자 배경 스타일 정의 */
+        #cadCanvas {
+            cursor: grab;
+            background-color: #0b0c10;
+        }
+        #cadCanvas:active {
+            cursor: grabbing;
+        }
+        /* 스크롤바 얇게 처리 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6366f1;
+        }
+        /* 사이드바 트랜지션 부드럽게 설정 */
+        .sidebar-transition {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen max-h-screen flex flex-col overflow-hidden">
+
+    <!-- 상단 헤더 바 -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between shadow-xl shrink-0 z-30">
+        <div class="flex items-center space-x-3.5">
+            <!-- 모바일용 좌측 패널 토글 버튼 -->
+            <button onclick="toggleLeftPanel()" class="lg:hidden bg-slate-800 p-2 rounded-lg text-slate-400 hover:text-white border border-slate-700">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/20">
+                <i class="fa-solid fa-drafting-compass text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
+                    CAD 횡단면도 멀티 측점 제너레이터 <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-1.5 py-0.5 rounded border border-indigo-500/30 hidden sm:inline">ENGINE v4.5</span>
+                </h1>
+                <p class="text-[10px] md:text-xs text-slate-400">계획고(FH) 연동형 원지반 종단면 사면 매핑 및 AutoCAD 무결성 한글 DXF 파일 내보내기</p>
+            </div>
+        </div>
+        
+        <!-- PC 중심 퀵 액션 가이드 -->
+        <div class="hidden xl:flex items-center space-x-6 text-xs text-slate-400 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800">
+            <span class="flex items-center gap-1.5"><kbd class="bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 shadow-sm font-semibold">R</kbd> 화면맞춤</span>
+            <span class="flex items-center gap-1.5"><kbd class="bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded border border-slate-700 shadow-sm font-semibold">E</kbd> 전체 DXF 내보내기</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-mouse text-indigo-400"></i> 마우스 휠 (Zoom) / 드래그 (Pan)</span>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <!-- 모바일용 우측 패널 토글 버튼 -->
+            <button onclick="toggleRightPanel()" class="lg:hidden bg-slate-800 p-2 rounded-lg text-slate-400 hover:text-white border border-slate-700">
+                <i class="fa-solid fa-chart-simple"></i>
+            </button>
+            <button onclick="resetCamera()" class="px-3 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600">
+                <i class="fa-solid fa-arrows-to-dot text-indigo-400"></i> <span class="hidden sm:inline">화면 맞춤 (R)</span>
+            </button>
+            <button onclick="exportProject()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600" title="현재 프로젝트를 JSON 파일로 저장">
+                <i class="fa-solid fa-download text-emerald-400"></i> <span class="hidden lg:inline">프로젝트 저장</span>
+            </button>
+            <label class="px-2.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600 cursor-pointer" title="JSON 파일로부터 프로젝트 불러오기">
+                <i class="fa-solid fa-upload text-emerald-400"></i> <span class="hidden lg:inline">프로젝트 불러오기</span>
+                <input type="file" accept=".json" onchange="importProject(event)" class="hidden">
+            </label>
+            <label class="hidden sm:flex items-center gap-1.5 px-2 text-[11px] text-slate-400 cursor-pointer select-none">
+                <input type="checkbox" id="excludeDimensionsOnExport" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                <span>내보내기 시 치수선 제외</span>
+            </label>
+            <button onclick="exportToDXF()" class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 hover:scale-[1.01] active:scale-95">
+                <i class="fa-solid fa-file-export"></i> <span>CAD 파일 내보내기 (E)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 메인 대시보드 구조 (양측 메뉴 고정 배치 3단 그리드 시스템) -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- 좌측 제어 메뉴 패널 -->
+        <aside id="leftSidebar" class="sidebar-transition fixed lg:relative top-0 bottom-0 left-0 w-80 lg:w-96 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-2xl z-25 h-full transform -translate-x-full lg:translate-x-0">
+            
+            <!-- 도면 표준 스케일(Scale) 및 프리셋 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span>도면 설계 기준</span>
+                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                </button>
+                <div class="accordion-content hidden space-y-3 pt-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">축척 (Scale)</label>
+                        <select id="cadScale" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold appearance-none cursor-pointer">
+                            <option value="10">1 : 10</option>
+                            <option value="20">1 : 20</option>
+                            <option value="30">1 : 30</option>
+                            <option value="50">1 : 50</option>
+                            <option value="100" selected>1 : 100</option>
+                            <option value="200">1 : 200</option>
+                            <option value="1000">1 : 1000</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">설계 프리셋</label>
+                        <select onchange="applyPreset(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs focus:outline-none focus:border-indigo-500 text-indigo-300 font-bold cursor-pointer">
+                            <option value="">-- 프리셋 선택 --</option>
+                            <option value="national">국도 표준 단면</option>
+                            <option value="highway">도시고속도로 단면</option>
+                            <option value="local">지방도 (보도 포함)</option>
+                        </select>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 계획고(FH) 및 원지반고 수치 설정 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span>토공 기하 매핑 기준 (수동/연계 가능)</span>
+                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                </button>
+                <div class="accordion-content hidden space-y-3 pt-3">
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">C.L 계획고(FH)</label>
+                        <div class="relative">
+                            <input type="number" id="planHeight" value="10.00" step="0.01" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-bold">
+                            <span class="absolute right-1 top-1 text-[9px] text-slate-500">m</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">C.L 원지반고(GH)</label>
+                        <div class="relative">
+                            <input type="number" id="groundHeight" value="9.30" step="0.01" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-bold">
+                            <span class="absolute right-1 top-1 text-[9px] text-slate-500">m</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">원지반 구배</label>
+                        <div class="relative">
+                            <input type="number" id="groundSlope" value="0.0" step="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-bold">
+                            <span class="absolute right-1 top-1 text-[9px] text-slate-500">%</span>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 측점 등록 및 관리 모듈 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-indigo-900/40 space-y-3">
+                <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>측점 관리 (Station Manager)</span>
+                    <span class="text-[9px] text-slate-500" id="stationCountText">등록된 측점: 3개</span>
+                </span>
+
+                <!-- 명명 형식 및 간격 설정 유닛 -->
+                <div class="grid grid-cols-2 gap-2 bg-slate-900/40 p-2 rounded-lg border border-slate-800/80">
+                    <div>
+                        <label class="block text-[9px] text-slate-400 mb-1">측점 형식</label>
+                        <select id="stationNameType" onchange="changeStationNamingFormat()" class="w-full bg-slate-950 border border-slate-800 rounded py-1 px-1.5 text-[11px] font-bold text-slate-300">
+                            <option value="STA" selected>STA. (STA 0+20)</option>
+                            <option value="NO">NO. (No. 1)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] text-slate-400 mb-1">기본 간격 (L)</label>
+                        <div class="relative">
+                            <input type="number" id="stationInterval" value="20" min="5" max="100" onchange="changeStationNamingFormat()" class="w-full bg-slate-950 border border-slate-800 rounded py-1 px-1.5 text-[11px] font-bold text-slate-300">
+                            <span class="absolute right-1.5 top-1 text-[9px] text-slate-500">m</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-1.5">
+                    <input type="number" id="stationDistanceInput" placeholder="누적 거리 입력 (m)" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-slate-200 font-bold focus:outline-none focus:border-indigo-500 placeholder-slate-600">
+                    <button onclick="addNewStationByDistance()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shrink-0">
+                        <i class="fa-solid fa-plus"></i> 추가
+                    </button>
+                </div>
+                <p class="text-[9px] text-slate-500 -mt-1">현재 선택된 측점의 설정을 복제하여 지정 거리에 새 측점을 생성합니다.</p>
+
+                <!-- 실시간 측점 스위처 목록 -->
+                <div id="stationListContainer" class="space-y-1.5 max-h-48 overflow-y-auto pr-1 border border-slate-800/40 rounded-lg p-1.5 bg-slate-950/40">
+                    <!-- JS에 의해 동적 바인딩 -->
+                </div>
+
+                <!-- 표 붙여넣기 일괄 생성 -->
+                <div class="pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <label class="block text-[10px] text-slate-400">측점 표 붙여넣기 (측점, 좌측차로, 구배, 우측차로, 구배, 원지반고, 계획고, 아스콘, 기층, 보조기층 · 탭 구분)</label>
+                    <textarea id="stationBulkInput" rows="3" placeholder="예)
+0+020.0000	2.69	2.00	5.83	-2.00	9.30	10.00	5	10	20
+0+040.0000		2.00	4.69	-2.00	9.40	10.05	5	10	20" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-indigo-500 placeholder-slate-600"></textarea>
+                    <button onclick="bulkGenerateStations()" class="w-full bg-indigo-950/60 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-200 font-bold py-1.5 rounded-lg border border-indigo-900 transition-all flex items-center justify-center gap-1 text-[11px]">
+                        <i class="fa-solid fa-table"></i> 표에서 측점 일괄 생성
+                    </button>
+                </div>
+
+                <!-- 뷰모드 조절 및 즉각 저장 단추 -->
+                <div class="flex flex-col gap-2 pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 transition-colors">
+                        <input type="checkbox" id="viewAllStations" onchange="toggleViewAll()" class="rounded border-slate-850 bg-slate-950 text-indigo-600 focus:ring-0">
+                        <span class="font-medium text-xs">도면에 모든 측점 표시</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="interpolateStations()" class="w-full bg-slate-800 hover:bg-slate-750 text-emerald-400 hover:text-emerald-300 font-bold py-1.5 rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-1 text-[11px]">
+                            <i class="fa-solid fa-calculator"></i> 측점 자동 보간
+                        </button>
+                        <button onclick="saveActiveStationChanges()" class="w-full bg-slate-850 hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 font-bold py-1.5 rounded-lg border border-indigo-950 transition-all flex items-center justify-center gap-1 text-[11px]">
+                            <i class="fa-solid fa-floppy-disk"></i> 설정 저장
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 섹션 1: 차도 단면 매개변수 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-road text-indigo-400"></i> 차도폭 및 구배 (센터 기준)</span>
+                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                </button>
+                <div class="accordion-content hidden space-y-3 pt-3">
+                <!-- 좌측 차로 -->
+                <div class="space-y-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+                    <div class="text-[11px] font-bold text-indigo-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-left"></i> 좌측 차로 (Center ➔ Left Edge)
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">거리 (W)</label>
+                            <div class="relative">
+                                <input type="number" id="leftDist" value="3.25" step="0.05" min="0.5" max="20" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">구배 (S)</label>
+                            <div class="relative">
+                                <input type="number" id="leftSlope" value="-2.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 우측 차로 -->
+                <div class="space-y-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+                    <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                        우측 차로 (Center ➔ Right Edge) <i class="fa-solid fa-arrow-right"></i>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">거리 (W)</label>
+                            <div class="relative">
+                                <input type="number" id="rightDist" value="3.25" step="0.05" min="0.5" max="20" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">구배 (S)</label>
+                            <div class="relative">
+                                <input type="number" id="rightSlope" value="-2.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 경계석/인도부 + 배수로 모달 오픈 버튼 -->
+            <button type="button" onclick="openModal('modalCurbDitch')" class="w-full bg-slate-950/50 hover:bg-slate-900 p-3 rounded-xl border border-slate-800/60 flex items-center justify-between transition-all group">
+                <span class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-person-walking text-orange-400"></i> 경계석/인도부 및 배수로 설계
+                </span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-slate-500 group-hover:text-orange-400 text-[11px]"></i>
+            </button>
+
+
+            <!-- 섹션 4: 포장 공종 구조 설정 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60 pb-6">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-400"></i> 도로 포장 단면 (CM)</span>
+                    <span class="flex items-center gap-2">
+                        <span class="text-[10px] text-amber-400 font-bold" id="totalPavementThick">35 cm</span>
+                        <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                    </span>
+                </button>
+                <div class="accordion-content hidden space-y-3 pt-3">
+                <div class="space-y-2 text-xs">
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="font-medium text-slate-300">아스콘 표층 두께</span>
+                            <span class="text-indigo-400 font-bold" id="asphaltText">5 cm</span>
+                        </div>
+                        <input type="range" id="asphaltThick" min="3" max="15" step="1" value="5" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="font-medium text-slate-300">기층 두께</span>
+                            <span class="text-amber-400 font-bold" id="baseText">10 cm</span>
+                        </div>
+                        <input type="range" id="baseThick" min="5" max="25" step="1" value="10" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="font-medium text-slate-300">보조기층 두께</span>
+                            <span class="text-emerald-400 font-bold" id="subbaseText">20 cm</span>
+                        </div>
+                        <input type="range" id="subbaseThick" min="10" max="40" step="1" value="20" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+                </div>
+
+                <!-- 적용 대상 측점 선택 -->
+                <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">적용 대상 측점</span>
+                    <div class="flex gap-3 text-[11px] text-slate-300">
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="pavementApplyScope" value="current" checked onchange="updatePavementApplyScopeUI()" class="text-amber-500 focus:ring-0"> 현재 측점
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="pavementApplyScope" value="all" onchange="updatePavementApplyScopeUI()" class="text-amber-500 focus:ring-0"> 전체 측점
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="pavementApplyScope" value="select" onchange="updatePavementApplyScopeUI()" class="text-amber-500 focus:ring-0"> 측점 선택
+                        </label>
+                    </div>
+                    <div id="pavementApplyStationList" class="hidden max-h-28 overflow-y-auto space-y-1 border border-slate-800/40 rounded-lg p-1.5 bg-slate-950/40">
+                        <!-- JS에 의해 동적 바인딩 -->
+                    </div>
+                    <button onclick="applyPavementSettings()" class="w-full bg-amber-950/60 hover:bg-amber-900 text-amber-300 hover:text-amber-200 font-bold py-1.5 rounded-lg border border-amber-900 transition-all flex items-center justify-center gap-1 text-[11px]">
+                        <i class="fa-solid fa-check"></i> 설정 적용
+                    </button>
+                </div>
+                </div>
+            </div>
+
+        </aside>
+        <!-- 모달: 경계석/인도부 및 배수로 설계 -->
+        <div id="modalCurbDitch" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-person-walking text-orange-400"></i> 경계석/인도부 및 배수로 설계</h3>
+                    <button type="button" onclick="closeModal('modalCurbDitch')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+
+                <!-- 적용 대상 측점 선택 -->
+                <div class="bg-slate-950/50 p-3 rounded-xl border border-orange-900/40 space-y-2">
+                    <span class="text-[10px] font-bold text-orange-400 uppercase tracking-wider block">적용 대상 측점</span>
+                    <div class="flex gap-3 text-[11px] text-slate-300">
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="curbApplyScope" value="current" checked onchange="updateCurbApplyScopeUI()" class="text-orange-500 focus:ring-0"> 현재 측점
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="curbApplyScope" value="all" onchange="updateCurbApplyScopeUI()" class="text-orange-500 focus:ring-0"> 전체 측점
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="curbApplyScope" value="select" onchange="updateCurbApplyScopeUI()" class="text-orange-500 focus:ring-0"> 측점 선택
+                        </label>
+                    </div>
+                    <div id="curbApplyStationList" class="hidden max-h-28 overflow-y-auto space-y-1 border border-slate-800/40 rounded-lg p-1.5 bg-slate-950/40">
+                        <!-- JS에 의해 동적 바인딩 -->
+                    </div>
+                    <button onclick="applyCurbDitchSettings()" class="w-full bg-orange-950/60 hover:bg-orange-900 text-orange-300 hover:text-orange-200 font-bold py-1.5 rounded-lg border border-orange-900 transition-all flex items-center justify-center gap-1 text-[11px]">
+                        <i class="fa-solid fa-check"></i> 설정 적용
+                    </button>
+                </div>
+
+            <!-- 섹션 2: 경계석 및 인도부 설계 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-person-walking text-orange-400"></i> 경계석 및 인도부 (보도블럭)</span>
+                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                </button>
+                <div class="accordion-content space-y-3 pt-3">
+                <!-- 좌측 경계석 및 인도 -->
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
+                    <div class="text-[11px] font-bold text-indigo-400 flex items-center gap-1.5"><i class="fa-solid fa-arrow-left"></i> 좌측 보도 영역</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">경계석 옵션</label>
+                            <select id="leftCurbType" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-[11px] focus:outline-none text-slate-200">
+                                <option value="none" selected>설치 안 함</option>
+                                <option value="l_curb">보차도경계석(L형)</option>
+                                <option value="r_curb">도로경계석(일반)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end pb-1">
+                            <label class="inline-flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                                <input type="checkbox" id="leftSidewalkActive" class="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0">
+                                <span>인도(보도블럭)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="leftSidewalkDetail" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">인도 폭 (W)</label>
+                            <div class="relative">
+                                <input type="number" id="leftSidewalkWidth" value="1.5" step="0.1" min="0.5" max="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none text-slate-200">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">인도 구배 (S)</label>
+                            <div class="relative">
+                                <input type="number" id="leftSidewalkSlope" value="-2.0" step="0.1" min="-10" max="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none text-slate-200">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 우측 경계석 및 인도 -->
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
+                    <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">우측 보도 영역 <i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">경계석 옵션</label>
+                            <select id="rightCurbType" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-[11px] focus:outline-none text-slate-200">
+                                <option value="none" selected>설치 안 함</option>
+                                <option value="l_curb">보차도경계석(L형)</option>
+                                <option value="r_curb">도로경계석(일반)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end pb-1">
+                            <label class="inline-flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                                <input type="checkbox" id="rightSidewalkActive" class="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0">
+                                <span>인도(보도블럭)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="rightSidewalkDetail" class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">인도 폭 (W)</label>
+                            <div class="relative">
+                                <input type="number" id="rightSidewalkWidth" value="1.5" step="0.1" min="0.5" max="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none text-slate-200">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">인도 구배 (S)</label>
+                            <div class="relative">
+                                <input type="number" id="rightSidewalkSlope" value="-2.0" step="0.1" min="-10" max="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none text-slate-200">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 섹션 3: 배수로 규격 설정 -->
+            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
+                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-water-ladder text-cyan-400"></i> U형 측구 배수로 설계</span>
+                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+                </button>
+                <div class="accordion-content space-y-3 pt-3">
+                <!-- 좌측 배수로 -->
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span> 좌측 배수로 설치
+                        </span>
+                        <label class="relative inline-flex items-center cursor-pointer text-[12px]">
+                            <input type="checkbox" id="leftDitchActive" checked class="sr-only peer">
+                            <div class="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div id="leftDitchDetail" class="space-y-1">
+                        <label class="block text-[10px] text-slate-400">기성 수로관 표준 규격</label>
+                        <select id="leftDitchPreset" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold cursor-pointer">
+                            <option value="300">플룸관 300 (내경 300x300)</option>
+                            <option value="400" selected>플룸관 400 (내경 400x400)</option>
+                            <option value="500">플룸관 500 (내경 500x500)</option>
+                            <option value="600">플룸관 600 (내경 600x600)</option>
+                            <option value="700">플룸관 700 (내경 700x700)</option>
+                            <option value="800">플룸관 800 (내경 800x800)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 우측 배수로 -->
+                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 우측 배수로 설치
+                        </span>
+                        <label class="relative inline-flex items-center cursor-pointer text-[12px]">
+                            <input type="checkbox" id="rightDitchActive" checked class="sr-only peer">
+                            <div class="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div id="rightDitchDetail" class="space-y-1">
+                        <label class="block text-[10px] text-slate-400">기성 수로관 표준 규격</label>
+                        <select id="rightDitchPreset" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold cursor-pointer">
+                            <option value="300">플룸관 300 (내경 300x300)</option>
+                            <option value="400" selected>플룸관 400 (내경 400x400)</option>
+                            <option value="500">플룸관 500 (내경 500x500)</option>
+                            <option value="600">플룸관 600 (내경 600x600)</option>
+                            <option value="700">플룸관 700 (내경 700x700)</option>
+                            <option value="800">플룸관 800 (내경 800x800)</option>
+                        </select>
+                    </div>
+                </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+
+        <!-- 모바일 사이드바 활성화 시 오버레이 배경 -->
+        <div id="sidebarOverlay" onclick="closeAllPanels()" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-20 transition-all duration-300 lg:hidden"></div>
+
+        <!-- 중앙 도면 뷰어 영역 -->
+        <section class="flex-1 flex flex-col relative bg-slate-950 overflow-hidden h-full">
+            <!-- 캔버스 드로잉 노드 -->
+            <canvas id="cadCanvas" class="w-full h-full"></canvas>
+            
+            <!-- 실시간 좌표 및 정보 오버레이 바 -->
+            <div class="absolute bottom-4 left-4 right-4 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-slate-400 shadow-2xl pointer-events-none z-10">
+                <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 justify-center md:justify-start">
+                    <span class="flex items-center gap-1.5 font-medium"><i class="fa-solid fa-crosshairs text-slate-500"></i> 마우스 좌표: <b id="coordIndicator" class="text-slate-200">0.000, 0.000</b></span>
+                    <span class="flex items-center gap-1.5 font-medium"><i class="fa-solid fa-magnifying-glass text-slate-500"></i> 뷰포트 배율: <b id="zoomFactorIndicator" class="text-slate-200">1:100</b></span>
+                    <span class="flex items-center gap-1.5 font-medium"><i class="fa-solid fa-border-none text-slate-500"></i> 격자 눈금: <b class="text-indigo-400">1.0 m</b></span>
+                </div>
+                <div class="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[10px] justify-center font-bold">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-green-500 rounded-sm"></span> 도로면</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-orange-400 rounded-sm"></span> 경계석</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-yellow-500 rounded-sm"></span> 인도부</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-cyan-400 rounded-sm"></span> U배수로</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-amber-600 rounded-sm"></span> 원지반</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-500 rounded-sm"></span> 치수선</span>
+                </div>
+            </div>
+
+            <!-- 커스텀 모달 / 알림 통지 레이어 -->
+            <div id="toastMessage" class="absolute top-6 right-6 bg-slate-900/95 backdrop-blur-md border border-slate-800 border-l-4 border-indigo-500 rounded-xl p-4 shadow-2xl transition-all translate-x-[450px] duration-300 opacity-0 flex items-center gap-3.5 z-50 max-w-sm pointer-events-auto">
+                <div class="bg-indigo-500/10 p-2 rounded-lg text-indigo-400">
+                    <i class="fa-solid fa-circle-check text-lg"></i>
+                </div>
+                <div>
+                    <h5 class="text-xs font-bold text-slate-200" id="toastTitle">알림</h5>
+                    <p class="text-[11px] text-slate-400 mt-0.5 leading-relaxed" id="toastBody">성공적으로 처리되었습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 우측 레이어 및 요약 패널 -->
+        <aside id="rightSidebar" class="sidebar-transition fixed lg:relative top-0 bottom-0 right-0 w-80 bg-slate-900 border-l border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-2xl z-25 h-full transform translate-x-full lg:translate-x-0">
+            
+            <!-- 레이어 조작기 (CAD Layer Visibility Manager) -->
+            <div class="space-y-3 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-layer-group text-indigo-400"></i> 레이어 표시 제어
+                </h3>
+                <div class="grid grid-cols-1 gap-1 text-xs">
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-green-500 w-4"></i> ROAD (도로면)</span>
+                        <input type="checkbox" id="layer_ROAD" checked onchange="toggleLayer('ROAD')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-orange-400 w-4"></i> CURB (경계석)</span>
+                        <input type="checkbox" id="layer_CURB" checked onchange="toggleLayer('CURB')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-yellow-500 w-4"></i> SIDEWALK (인도부)</span>
+                        <input type="checkbox" id="layer_SIDEWALK" checked onchange="toggleLayer('SIDEWALK')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-amber-500 w-4"></i> PAVEMENT (포장층)</span>
+                        <input type="checkbox" id="layer_PAVEMENT" checked onchange="toggleLayer('PAVEMENT')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-cyan-400 w-4"></i> UDITCH (배수로)</span>
+                        <input type="checkbox" id="layer_UDITCH" checked onchange="toggleLayer('UDITCH')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-amber-600 w-4"></i> GROUND (원지반선)</span>
+                        <input type="checkbox" id="layer_GROUND" checked onchange="toggleLayer('GROUND')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-red-500 w-4"></i> DIMENSION (치수)</span>
+                        <input type="checkbox" id="layer_DIMENSION" checked onchange="toggleLayer('DIMENSION')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-red-400 w-4"></i> DIM_DETAIL (상세 치수)</span>
+                        <input type="checkbox" id="layer_DIM_DETAIL" checked onchange="toggleLayer('DIM_DETAIL')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-red-500 w-4"></i> HATCH (사선 해칭)</span>
+                        <input type="checkbox" id="layer_HATCH" checked onchange="toggleLayer('HATCH')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-fuchsia-400 w-4"></i> CENTER (중심선)</span>
+                        <input type="checkbox" id="layer_CENTER" checked onchange="toggleLayer('CENTER')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-slate-400 w-4"></i> DATUM (기준선)</span>
+                        <input type="checkbox" id="layer_DATUM" checked onchange="toggleLayer('DATUM')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                    <label class="flex items-center justify-between p-1 hover:bg-slate-800/40 rounded transition-all cursor-pointer">
+                        <span class="flex items-center gap-2 text-slate-300"><i class="fa-solid fa-eye text-slate-500 w-4"></i> GRID (격자눈금)</span>
+                        <input type="checkbox" id="layer_GRID" checked onchange="toggleLayer('GRID')" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+                    </label>
+                </div>
+            </div>
+
+            <!-- 신규 추가: 수량산출서 실시간 적산 모듈 -->
+            <div class="space-y-3 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60 text-xs">
+                <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-calculator"></i> 토목 수량 산출서 (적산)</span>
+                    <button onclick="copyQuantitiesToClipboard()" class="text-[9px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-0.5 rounded border border-emerald-500/30 font-bold transition-all flex items-center gap-1">
+                        <i class="fa-solid fa-clipboard"></i> 엑셀 복사
+                    </button>
+                </h3>
+                <div class="space-y-2 text-[11px]" id="quantityEstimationPanel">
+                    <!-- 수량 적산 데이터가 동적으로 연산 및 로딩됨 -->
+                </div>
+            </div>
+
+            <!-- 도로 기하 구조 요약 패널 (계획고/원지반고 매핑 정보) -->
+            <div class="space-y-2 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60 text-xs">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-chart-bar text-indigo-400"></i> 도면 구조체 연산 정보
+                </h3>
+                <div class="space-y-2 text-[11px]">
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">순수 차도폭:</span>
+                        <b class="text-slate-200" id="totalRoadWidth">6.50 m</b>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">좌측인도/우측인도:</span>
+                        <b class="text-slate-200" id="sidewalkWidthText">없음 / 없음</b>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">C.L 계획고(FH):</span>
+                        <b class="text-indigo-300 font-bold" id="centerElevationText">10.000 m</b>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">좌측 끝단 계획고:</span>
+                        <b class="text-slate-200" id="leftEdgeHeight">9.935 m</b>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">우측 끝단 계획고:</span>
+                        <b class="text-slate-200" id="rightEdgeHeight">9.935 m</b>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-850 pb-1">
+                        <span class="text-slate-400">원지반고 편차 (C.L):</span>
+                        <b class="text-emerald-400" id="groundDiffText">0.700 m (성토)</b>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 설계 제약조건 검토 패널 -->
+            <div class="space-y-3 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60 text-xs">
+                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-circle-nodes text-emerald-400"></i> 수로관 상세 치수 목록
+                </h3>
+                <div class="space-y-2 text-[11px]" id="ditchSummaryPanel">
+                    <!-- 수로관의 내외경 치수가 동적 바인딩됩니다. -->
+                </div>
+            </div>
+
+            <!-- 도움말 박스 -->
+            <div class="mt-auto bg-indigo-950/20 border border-indigo-800/35 rounded-xl p-3 text-slate-300 shrink-0">
+                <h4 class="text-xs font-bold text-indigo-300 mb-1.5"><i class="fa-solid fa-circle-info"></i> 무결성 CAD 내보내기 가이드</h4>
+                <p class="text-[10px] leading-relaxed text-slate-400">
+                    한글 인코딩 깨짐을 방지하기 위해, 오토캐드 표준 CIF(Character Interchange Format) 유니코드 이스케이프(<code class="text-rose-400 font-mono">\U+XXXX</code>) 알고리즘으로 DXF 한글 텍스트를 자동 변환하여 내보냅니다.
+                </p>
+            </div>
+        </aside>
+
+    </main>
+
+    <script>
+        // 기성용 U형 배수로 정밀 치수 데이터베이스 정의 (단위: mm)
+        const DITCH_DATABASE = {
+            "300": { innerW: 300, innerH: 300, wallT: 50, bottomT: 50, label: "U-300 (300x300)" },
+            "400": { innerW: 400, innerH: 400, wallT: 60, bottomT: 60, label: "U-400 (400x400)" },
+            "500": { innerW: 500, innerH: 500, wallT: 70, bottomT: 70, label: "U-500 (500x500)" },
+            "600": { innerW: 600, innerH: 600, wallT: 80, bottomT: 80, label: "U-600 (600x600)" },
+            "700": { innerW: 700, innerH: 700, wallT: 90, bottomT: 90, label: "U-700 (700x700)" },
+            "800": { innerW: 800, innerH: 800, wallT: 100, bottomT: 100, label: "U-800 (800x800)" }
+        };
+
+        const canvas = document.getElementById('cadCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 카메라 투영 변수 (Zoom & Pan)
+        let zoomScale = 0.035; // 기본 줌 배율 (1:100 기본 시인성 확보용)
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let startDragX = 0;
+        let startDragY = 0;
+        
+        // 멀티 터치 핀치 줌을 위한 변수
+        let touchStartDist = 0;
+
+        // 글로벌 명명 규칙 상태
+        let stationNamingType = "STA"; // STA or NO
+        let stationInterval = 20;      // m
+
+        // 설계 파라미터 기본 구조체 (1:100 표준 및 5cm/10cm/20cm 기본값)
+        const DEFAULT_PARAMS = {
+            leftDist: 3.25,     // m
+            leftSlope: -2.0,   // %
+            rightDist: 3.25,    // m
+            rightSlope: -2.0,  // %
+            
+            leftCurbType: "none",  // 기본 '설치 안 함' 적용
+            rightCurbType: "none", // 기본 '설치 안 함' 적용
+            
+            leftSidewalkActive: false,  // 기본 체크 해제 적용
+            leftSidewalkWidth: 1.5, // m
+            leftSidewalkSlope: -2.0, // %
+            
+            rightSidewalkActive: false, // 기본 체크 해제 적용
+            rightSidewalkWidth: 1.5, // m
+            rightSidewalkSlope: -2.0, // %
+
+            leftDitchActive: true,
+            leftDitchSize: "400",       // 기본 400 배수로
+            rightDitchActive: true,
+            rightDitchSize: "400",      // 기본 400 배수로
+            
+            asphaltThick: 5,   // cm
+            baseThick: 10,     // cm
+            subbaseThick: 20,  // cm
+            scale: 100,         // 도면 축척 기본값 (1:100)
+
+            // 계획고 & 원지반 파라미터
+            planHeight: 10.00,  // m (C.L 계획고)
+            groundHeight: 9.30, // m (C.L 원지반고)
+            groundSlope: 0.0    // % (원지반 구배)
+        };
+
+        // 로드된 측점 배열 데이터베이스 (distance 기반 관리)
+        let stations = [
+            { id: "st_1", distance: 0, params: JSON.parse(JSON.stringify(DEFAULT_PARAMS)) },
+            { id: "st_2", distance: 20, params: { ...DEFAULT_PARAMS, leftDist: 3.50, rightDist: 3.50, groundHeight: 9.50 } },
+            { id: "st_3", distance: 40, params: { ...DEFAULT_PARAMS, leftDist: 3.50, rightDist: 3.50, leftSidewalkWidth: 2.0, rightSidewalkWidth: 2.0, groundHeight: 9.10 } }
+        ];
+        let activeStationId = "st_1";
+        let viewAllStationsMode = false; // 모든 측점을 동시에 도면에 연속 렌더링하는 토글 변수
+        let currentScale = 100;          // 글로벌 단일 축척 상태 제어 변수 (1:100 기본)
+
+        // 현재 수동 튜닝용 active params 매핑
+        let params = JSON.parse(JSON.stringify(stations[0].params));
+
+        // 레이어 가시성 컨트롤러
+        let visibleLayers = {
+            ROAD: true,
+            CURB: true,
+            SIDEWALK: true,
+            PAVEMENT: true,
+            UDITCH: true,
+            GROUND: true, // 신규: 원지반 레이어 추가
+            DIMENSION: true,
+            DIM_DETAIL: true, // 이미지 스펙 상세 치수선 레이어
+            HATCH: true,      // 이미지 사선 해칭 레이어
+            CENTER: true,
+            DATUM: true,
+            GRID: true
+        };
+
+        // 계산된 도면 지형 정보 및 벡터 모델 디렉토리
+        let geoElements = [];
+
+        // 측점관리+차도폭, 경계석/배수로 모달 열기/닫기
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'modalCurbDitch') updateCurbApplyScopeUI();
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // 포장 단면 설정 적용 대상 라디오 변경 시 측점 선택 목록 표시 제어
+        function updatePavementApplyScopeUI() {
+            const scope = document.querySelector('input[name="pavementApplyScope"]:checked').value;
+            const listEl = document.getElementById('pavementApplyStationList');
+            if (scope === 'select') {
+                listEl.classList.remove('hidden');
+                renderPavementApplyStationList();
+            } else {
+                listEl.classList.add('hidden');
+            }
+        }
+
+        // 측점 선택 체크리스트 렌더링 (포장 단면 적용 대상)
+        function renderPavementApplyStationList() {
+            const listEl = document.getElementById('pavementApplyStationList');
+            listEl.innerHTML = stations.map(st => `
+                <label class="flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer">
+                    <input type="checkbox" class="pavementApplyStationCheckbox rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0" value="${st.id}" ${st.id === activeStationId ? 'checked' : ''}>
+                    <span>${getStationName(st.distance)} (${st.distance}m)</span>
+                </label>
+            `).join('');
+        }
+
+        // 포장 단면(아스콘/기층/보조기층) 설정을 현재 측점 값을 기준으로 선택된 측점(들)에 적용
+        function applyPavementSettings() {
+            saveActiveStationChanges();
+
+            const scope = document.querySelector('input[name="pavementApplyScope"]:checked').value;
+            let targetIds = [];
+            if (scope === 'current') {
+                targetIds = [activeStationId];
+            } else if (scope === 'all') {
+                targetIds = stations.map(st => st.id);
+            } else {
+                targetIds = Array.from(document.querySelectorAll('.pavementApplyStationCheckbox:checked')).map(el => el.value);
+            }
+
+            if (targetIds.length === 0) {
+                showToast("적용 실패", "적용할 측점을 하나 이상 선택해주세요.");
+                return;
+            }
+
+            const fieldsToCopy = ['asphaltThick', 'baseThick', 'subbaseThick'];
+            let appliedCount = 0;
+            stations.forEach(st => {
+                if (!targetIds.includes(st.id)) return;
+                fieldsToCopy.forEach(f => { st.params[f] = params[f]; });
+                appliedCount++;
+            });
+
+            calculateGeometry();
+            draw();
+            showToast("설정 적용 완료", `포장 단면 설정이 ${appliedCount}개 측점에 적용되었습니다.`);
+        }
+
+        // 경계석/배수로 설정 적용 대상 라디오 변경 시 측점 선택 목록 표시 제어
+        function updateCurbApplyScopeUI() {
+            const scope = document.querySelector('input[name="curbApplyScope"]:checked').value;
+            const listEl = document.getElementById('curbApplyStationList');
+            if (scope === 'select') {
+                listEl.classList.remove('hidden');
+                renderCurbApplyStationList();
+            } else {
+                listEl.classList.add('hidden');
+            }
+        }
+
+        // 프로젝트 전체(측점, 축척, 활성 파라미터)를 JSON 파일로 저장
+        function exportProject() {
+            saveActiveStationChanges();
+            const projectData = {
+                version: "1.0",
+                savedAt: new Date().toISOString(),
+                currentScale: currentScale,
+                activeStationId: activeStationId,
+                stations: stations
+            };
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.href = url;
+            a.download = `cad_project_${ts}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("프로젝트 저장 완료", "현재 측점 및 설정이 JSON 파일로 저장되었습니다.");
+        }
+
+        // JSON 파일로부터 프로젝트(측점, 축척, 활성 파라미터) 불러오기
+        function importProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.stations || !Array.isArray(data.stations) || data.stations.length === 0) {
+                        throw new Error("측점 데이터가 없습니다.");
+                    }
+                    stations = data.stations;
+                    currentScale = data.currentScale || 100;
+                    activeStationId = data.activeStationId && stations.find(st => st.id === data.activeStationId)
+                        ? data.activeStationId
+                        : stations[0].id;
+
+                    document.getElementById('cadScale').value = currentScale;
+                    renderStationList();
+                    loadStationParams(activeStationId, true);
+                    showToast("프로젝트 불러오기 완료", `${stations.length}개 측점을 포함한 프로젝트를 불러왔습니다.`);
+                } catch (err) {
+                    showToast("불러오기 실패", "올바른 프로젝트 JSON 파일이 아닙니다.");
+                }
+                event.target.value = "";
+            };
+            reader.readAsText(file);
+        }
+
+        // 측점 선택 체크리스트 렌더링 (경계석/배수로 적용 대상)
+        function renderCurbApplyStationList() {
+            const listEl = document.getElementById('curbApplyStationList');
+            listEl.innerHTML = stations.map(st => `
+                <label class="flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] text-slate-300 hover:bg-slate-900 cursor-pointer">
+                    <input type="checkbox" class="curbApplyStationCheckbox rounded border-slate-700 bg-slate-950 text-orange-500 focus:ring-0" value="${st.id}" ${st.id === activeStationId ? 'checked' : ''}>
+                    <span>${getStationName(st.distance)} (${st.distance}m)</span>
+                </label>
+            `).join('');
+        }
+
+        // 경계석/인도부/배수로 설정을 현재 측점의 값을 기준으로 선택된 측점(들)에 적용
+        function applyCurbDitchSettings() {
+            saveActiveStationChanges(); // 현재 폼 값을 활성 측점에 우선 동기화
+
+            const scope = document.querySelector('input[name="curbApplyScope"]:checked').value;
+            let targetIds = [];
+            if (scope === 'current') {
+                targetIds = [activeStationId];
+            } else if (scope === 'all') {
+                targetIds = stations.map(st => st.id);
+            } else {
+                targetIds = Array.from(document.querySelectorAll('.curbApplyStationCheckbox:checked')).map(el => el.value);
+            }
+
+            if (targetIds.length === 0) {
+                showToast("적용 실패", "적용할 측점을 하나 이상 선택해주세요.");
+                return;
+            }
+
+            // 현재 활성 측점의 경계석/인도부/배수로 관련 값만 추출
+            const fieldsToCopy = [
+                'leftCurbType', 'rightCurbType',
+                'leftSidewalkActive', 'leftSidewalkWidth', 'leftSidewalkSlope',
+                'rightSidewalkActive', 'rightSidewalkWidth', 'rightSidewalkSlope',
+                'leftDitchActive', 'leftDitchSize',
+                'rightDitchActive', 'rightDitchSize'
+            ];
+
+            let appliedCount = 0;
+            stations.forEach(st => {
+                if (!targetIds.includes(st.id)) return;
+                fieldsToCopy.forEach(f => { st.params[f] = params[f]; });
+                appliedCount++;
+            });
+
+            calculateGeometry();
+            draw();
+            showToast("설정 적용 완료", `경계석/인도부/배수로 설정이 ${appliedCount}개 측점에 적용되었습니다.`);
+        }
+
+        // 좌측 메뉴 섹션 아코디언 접기/펼치기 (측점 관리는 항상 펼침, 나머지는 기본 접힘)
+        function toggleAccordion(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.accordion-icon');
+            content.classList.toggle('hidden');
+            if (icon) icon.classList.toggle('rotate-180');
+        }
+
+        function toggleLeftPanel() {
+            const sidebar = document.getElementById('leftSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                if (document.getElementById('rightSidebar').classList.contains('translate-x-full')) {
+                    overlay.classList.add('hidden');
+                }
+            }
+        }
+
+        function toggleRightPanel() {
+            const sidebar = document.getElementById('rightSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar.classList.contains('translate-x-full')) {
+                sidebar.classList.remove('translate-x-full');
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('translate-x-full');
+                if (document.getElementById('leftSidebar').classList.contains('-translate-x-full')) {
+                    overlay.classList.add('hidden');
+                }
+            }
+        }
+
+        function closeAllPanels() {
+            document.getElementById('leftSidebar').classList.add('-translate-x-full');
+            document.getElementById('rightSidebar').classList.add('translate-x-full');
+            document.getElementById('sidebarOverlay').classList.add('hidden');
+        }
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            draw();
+        }
+
+        // 명명 포맷 동적 변환 가동
+        function changeStationNamingFormat() {
+            stationNamingType = document.getElementById('stationNameType').value;
+            stationInterval = parseFloat(document.getElementById('stationInterval').value) || 20;
+            renderStationList();
+            calculateGeometry();
+            draw();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            renderStationList();
+            loadStationParams(activeStationId, false); // No. 0 데이터 바인딩
+            calculateGeometry();
+            resetCamera();       // 지형 정보를 스캔하여 정중앙 자동 정렬
+            setupInputListeners();
+            setupKeyboardShortcuts();
+            setupTouchInteractions();
+        });
+
+        // 측점 이름 빌더 함수
+        function getStationName(distance) {
+            if (stationNamingType === "STA") {
+                const km = Math.floor(distance / 1000);
+                const m = distance % 1000;
+                return `STA. ${km}+${m.toString().padStart(2, '0')}`;
+            } else {
+                const num = (distance / stationInterval).toFixed(1).replace('.0', '');
+                return `No. ${num}`;
+            }
+        }
+
+        // 측점 목록 동적 동기화 렌더링
+        function renderStationList() {
+            const container = document.getElementById('stationListContainer');
+            container.innerHTML = "";
+
+            stations.sort((a, b) => a.distance - b.distance); // 거리순 오름차순 정렬
+
+            stations.forEach((st, idx) => {
+                const isActive = st.id === activeStationId;
+                const formattedName = getStationName(st.distance);
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between p-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                    isActive 
+                    ? 'bg-indigo-600 text-white shadow-md border border-indigo-500' 
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                }`;
+                
+                const p = st.params;
+                const totalWidth = (p.leftDist + p.rightDist).toFixed(2);
+                const summaryText = `폭 ${totalWidth}m · FH ${p.planHeight.toFixed(2)}m`;
+
+                // 구간 유효성 검사: 이전 측점 대비 계획고 변화율(종단 구배)이 비정상적으로 큰 경우 경고
+                let warningIcon = '';
+                if (idx > 0) {
+                    const prevSt = stations[idx - 1];
+                    const distGap = st.distance - prevSt.distance;
+                    if (distGap > 0) {
+                        const gradePct = Math.abs(p.planHeight - prevSt.params.planHeight) / distGap * 100;
+                        if (gradePct > 8) {
+                            warningIcon = `<i class="fa-solid fa-triangle-exclamation text-amber-400 text-[10px]" title="이전 측점 대비 종단 구배 ${gradePct.toFixed(1)}% (급구배 주의)"></i>`;
+                        }
+                    }
+                }
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2 flex-1 min-w-0" onclick="selectStation('${st.id}')">
+                        <i class="fa-solid fa-map-pin ${isActive ? 'text-white' : 'text-indigo-400'}"></i>
+                        <div class="flex flex-col min-w-0">
+                            <span class="truncate flex items-center gap-1.5">${formattedName} (${st.distance}m) ${warningIcon}</span>
+                            <span class="truncate text-[9px] font-normal ${isActive ? 'text-indigo-100' : 'text-slate-500'}">${summaryText}</span>
+                        </div>
+                    </div>
+                    ${stations.length > 1 ? `
+                        <button onclick="deleteStation('${st.id}', event)" class="p-1 text-slate-400 hover:text-red-400 transition-colors">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i>
+                        </button>
+                    ` : ''}
+                `;
+                container.appendChild(item);
+            });
+
+            document.getElementById('stationCountText').innerText = `등록된 측점: ${stations.length}개`;
+        }
+
+        // "0+020.0000" 형식의 STA 표기를 누적거리(m)로 변환
+        function parseSTAToMeters(str) {
+            str = str.trim();
+            if (str.includes('+')) {
+                const [a, b] = str.split('+');
+                return parseFloat(a) * 1000 + parseFloat(b);
+            }
+            return parseFloat(str);
+        }
+
+        // 표(탭 구분: 측점, 좌측차로, 구배, 우측차로, 구배, 원지반고, 계획고) 붙여넣기로 측점 일괄 생성
+        function bulkGenerateStations() {
+            const raw = document.getElementById('stationBulkInput').value;
+            const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            let rows = [];
+            lines.forEach(line => {
+                if (line.includes('측점')) return; // 헤더 행 스킵
+                const cols = line.split('\t');
+                if (cols.length < 5) return; // 탭 구분이 아니거나 열이 부족하면 스킵
+
+                const distance = parseSTAToMeters(cols[0]);
+                if (isNaN(distance)) return;
+
+                const toNumOrNull = (v) => (v === undefined || v.trim() === '') ? null : parseFloat(v);
+                rows.push({
+                    distance,
+                    ld: toNumOrNull(cols[1]),
+                    ls: toNumOrNull(cols[2]),
+                    rd: toNumOrNull(cols[3]),
+                    rs: toNumOrNull(cols[4]),
+                    gh: toNumOrNull(cols[5]), // 원지반고
+                    ph: toNumOrNull(cols[6]), // 계획고
+                    at: toNumOrNull(cols[7]), // 아스콘 표층 두께
+                    bt: toNumOrNull(cols[8]), // 기층 두께
+                    sbt: toNumOrNull(cols[9]) // 보조기층 두께
+                });
+            });
+
+            if (rows.length === 0) {
+                showToast("일괄 생성 실패", "인식 가능한 데이터가 없습니다. 표를 그대로(탭 구분) 붙여넣어 주세요.");
+                return;
+            }
+
+            rows.sort((a, b) => a.distance - b.distance);
+
+            // 빈 셀은 앞뒤 측점 값으로 선형 보간하여 채움
+            function fillGaps(key) {
+                for (let i = 0; i < rows.length; i++) {
+                    if (rows[i][key] !== null) continue;
+                    let prev = null, prevIdx = -1;
+                    for (let j = i - 1; j >= 0; j--) { if (rows[j][key] !== null) { prev = rows[j][key]; prevIdx = j; break; } }
+                    let next = null, nextIdx = -1;
+                    for (let j = i + 1; j < rows.length; j++) { if (rows[j][key] !== null) { next = rows[j][key]; nextIdx = j; break; } }
+                    if (prev !== null && next !== null) {
+                        const ratio = (rows[i].distance - rows[prevIdx].distance) / (rows[nextIdx].distance - rows[prevIdx].distance);
+                        rows[i][key] = Number((prev + (next - prev) * ratio).toFixed(2));
+                    } else if (prev !== null) {
+                        rows[i][key] = prev;
+                    } else if (next !== null) {
+                        rows[i][key] = next;
+                    }
+                }
+            }
+            ['ld', 'ls', 'rd', 'rs', 'gh', 'ph', 'at', 'bt', 'sbt'].forEach(fillGaps);
+
+            // 좌/우 거리·구배·원지반고·계획고·포장두께 외 나머지 설정(경계석, 배수로 등)은 현재 활성 측점 값을 템플릿으로 사용
+            const template = JSON.parse(JSON.stringify(params));
+
+            const newStations = rows.map((r, idx) => {
+                const p = JSON.parse(JSON.stringify(template));
+                p.leftDist = r.ld;
+                p.leftSlope = r.ls;
+                p.rightDist = r.rd;
+                p.rightSlope = r.rs;
+                if (r.gh !== null) p.groundHeight = r.gh;
+                if (r.ph !== null) p.planHeight = r.ph;
+                if (r.at !== null) p.asphaltThick = Math.round(r.at);
+                if (r.bt !== null) p.baseThick = Math.round(r.bt);
+                if (r.sbt !== null) p.subbaseThick = Math.round(r.sbt);
+                return {
+                    id: `st_bulk_${r.distance}_${Date.now()}_${idx}`,
+                    distance: r.distance,
+                    params: p
+                };
+            });
+
+            stations = newStations;
+            activeStationId = stations[0].id;
+            renderStationList();
+            loadStationParams(activeStationId, true);
+            document.getElementById('stationBulkInput').value = "";
+            showToast("측점 일괄 생성 완료", `표 데이터로부터 ${stations.length}개 측점이 자동 생성되었습니다.`);
+        }
+
+        // 새로운 측점 추가 (거리 기반)
+        function addNewStationByDistance() {
+            const distInput = document.getElementById('stationDistanceInput');
+            const distance = parseFloat(distInput.value);
+            if (isNaN(distance) || distance < 0) {
+                showToast("측점 추가 실패", "올바른 누적 거리를 입력해주세요 (0m 이상).");
+                return;
+            }
+
+            // 중복된 거리 체크
+            const duplicate = stations.find(st => st.distance === distance);
+            if (duplicate) {
+                showToast("중복 거리 존재", `누적거리 ${distance}m 측점이 이미 존재합니다.`);
+                return;
+            }
+
+            const newId = "st_" + Date.now();
+            const formattedName = getStationName(distance);
+
+            // 현재 파라미터를 복제하여 새 측점 생성
+            stations.push({
+                id: newId,
+                distance: distance,
+                params: JSON.parse(JSON.stringify(params))
+            });
+
+            distInput.value = "";
+            activeStationId = newId;
+            renderStationList();
+            loadStationParams(newId, true);
+            showToast("신규 측점 추가 완료", `[${formattedName}] 설계 단면이 생성되었습니다.`);
+        }
+
+        // 특정 측점 선택 및 폼 주입
+        function selectStation(id) {
+            saveActiveStationChanges(); // 전환 전 현재 변경값 자동 저장 유도
+            activeStationId = id;
+            renderStationList();
+            loadStationParams(id, true);
+            if (window.innerWidth < 1024) {
+                closeAllPanels();
+            }
+        }
+
+        // 측점 삭제
+        function deleteStation(id, event) {
+            event.stopPropagation();
+            if (stations.length <= 1) return;
+
+            stations = stations.filter(st => st.id !== id);
+            if (activeStationId === id) {
+                activeStationId = stations[0].id;
+            }
+            renderStationList();
+            loadStationParams(activeStationId, true);
+            showToast("측점 삭제 완료", "선택하신 측점이 안전하게 도면 목록에서 배제되었습니다.");
+        }
+
+        // 현재 UI 값을 선택된 활성 측점 데이터에 업데이트 동기화
+        function saveActiveStationChanges() {
+            const activeSt = stations.find(st => st.id === activeStationId);
+            if (activeSt) {
+                activeSt.params = JSON.parse(JSON.stringify(params));
+                const formattedName = getStationName(activeSt.distance);
+                showToast("측점 저장 완료", `[${formattedName}] 단면 사양이 실시간 동기화되었습니다.`, 1500);
+            }
+        }
+
+        // 측점의 데이터를 UI에 주입 및 로딩
+        function loadStationParams(id, recalculate = true) {
+            const target = stations.find(st => st.id === id);
+            if (!target) return;
+
+            params = JSON.parse(JSON.stringify(target.params));
+            // 로드 시 전 글로벌 축척을 강제 주입하여 축척 상태 일관성 유지
+            params.scale = currentScale;
+            updateUIFromParams();
+
+            if (recalculate) {
+                calculateGeometry();
+                if (!viewAllStationsMode) {
+                    resetCamera();
+                } else {
+                    draw();
+                }
+            }
+        }
+
+        // 전체보기 토글 제어
+        function toggleViewAll() {
+            viewAllStationsMode = document.getElementById('viewAllStations').checked;
+            calculateGeometry();
+            resetCamera();
+        }
+
+        // 유용한 추가 기능: 측점간 간격에 따른 선형 보간 일괄 생성기
+        function interpolateStations() {
+            if (stations.length < 2) {
+                showToast("보간 실패", "최소 2개 이상의 기준 측점이 등록되어 있어야 합니다.");
+                return;
+            }
+            
+            stations.sort((a, b) => a.distance - b.distance);
+            
+            let interpolated = [];
+            const stepDist = 5.0; // 5m 간격으로 자동 중간 선형 채움
+            
+            for (let i = 0; i < stations.length - 1; i++) {
+                const st1 = stations[i];
+                const st2 = stations[i + 1];
+                interpolated.push(st1);
+                
+                const distanceGap = st2.distance - st1.distance;
+                if (distanceGap <= stepDist) continue;
+
+                const segmentsCount = Math.floor(distanceGap / stepDist);
+                for (let j = 1; j <= segmentsCount; j++) {
+                    const currentDist = st1.distance + (j * stepDist);
+                    if (currentDist >= st2.distance) break;
+
+                    const ratio = (j * stepDist) / distanceGap;
+                    const p1 = st1.params;
+                    const p2 = st2.params;
+                    
+                    // 수치선형보간
+                    const interpParams = {
+                        ...DEFAULT_PARAMS,
+                        leftDist: Number((p1.leftDist + (p2.leftDist - p1.leftDist) * ratio).toFixed(2)),
+                        leftSlope: Number((p1.leftSlope + (p2.leftSlope - p1.leftSlope) * ratio).toFixed(1)),
+                        rightDist: Number((p1.rightDist + (p2.rightDist - p1.rightDist) * ratio).toFixed(2)),
+                        rightSlope: Number((p1.rightSlope + (p2.rightSlope - p1.rightSlope) * ratio).toFixed(1)),
+                        
+                        leftCurbType: p1.leftCurbType,
+                        rightCurbType: p1.rightCurbType,
+                        
+                        leftSidewalkActive: p1.leftSidewalkActive,
+                        leftSidewalkWidth: Number((p1.leftSidewalkWidth + (p2.leftSidewalkWidth - p1.leftSidewalkWidth) * ratio).toFixed(2)),
+                        leftSidewalkSlope: p1.leftSidewalkSlope,
+                        
+                        rightSidewalkActive: p1.rightSidewalkActive,
+                        rightSidewalkWidth: Number((p1.rightSidewalkWidth + (p2.rightSidewalkWidth - p1.rightSidewalkWidth) * ratio).toFixed(2)),
+                        rightSidewalkSlope: p1.rightSidewalkSlope,
+
+                        leftDitchActive: p1.leftDitchActive,
+                        leftDitchSize: p1.leftDitchSize,
+                        rightDitchActive: p1.rightDitchActive,
+                        rightDitchSize: p1.rightDitchSize,
+                        
+                        asphaltThick: p1.asphaltThick,
+                        baseThick: p1.baseThick,
+                        subbaseThick: p1.subbaseThick,
+                        scale: p1.scale,
+
+                        planHeight: Number((p1.planHeight + (p2.planHeight - p1.planHeight) * ratio).toFixed(2)),
+                        groundHeight: Number((p1.groundHeight + (p2.groundHeight - p1.groundHeight) * ratio).toFixed(2)),
+                        groundSlope: Number((p1.groundSlope + (p2.groundSlope - p1.groundSlope) * ratio).toFixed(1))
+                    };
+                    
+                    interpolated.push({
+                        id: `st_interp_${currentDist}_${Date.now()}`,
+                        distance: currentDist,
+                        params: interpParams
+                    });
+                }
+            }
+            interpolated.push(stations[stations.length - 1]);
+            
+            stations = interpolated;
+            activeStationId = stations[0].id;
+            renderStationList();
+            loadStationParams(activeStationId, true);
+            showToast("선형 자동 보간 성공", "각 측점 사이에 5m 간격의 정교한 횡단면 단차들이 자동 생성 보간되었습니다.");
+        }
+
+        // 프리셋 변경 적용
+        function applyPreset(type) {
+            if (type === 'national') {
+                params.leftDist = 3.25;
+                params.rightDist = 3.25;
+                params.leftSlope = -2.0;
+                params.rightSlope = -2.0;
+                params.leftCurbType = "none";
+                params.rightCurbType = "none";
+                params.leftSidewalkActive = false;
+                params.rightSidewalkActive = false;
+                params.leftDitchActive = true;
+                params.rightDitchActive = true;
+                params.leftDitchSize = "400";
+                params.rightDitchSize = "400";
+                params.asphaltThick = 5;
+                params.baseThick = 10;
+                params.subbaseThick = 20;
+            } else if (type === 'highway') {
+                params.leftDist = 3.5;
+                params.rightDist = 3.5;
+                params.leftSlope = -2.5;
+                params.rightSlope = -2.5;
+                params.leftCurbType = "r_curb";
+                params.rightCurbType = "r_curb";
+                params.leftSidewalkActive = false;
+                params.rightSidewalkActive = false;
+                params.leftDitchActive = true;
+                params.rightDitchActive = true;
+                params.leftDitchSize = "400";
+                params.rightDitchSize = "400";
+                params.asphaltThick = 7;
+                params.baseThick = 15;
+                params.subbaseThick = 25;
+            } else if (type === 'local') {
+                params.leftDist = 3.0;
+                params.rightDist = 3.0;
+                params.leftSlope = -2.0;
+                params.rightSlope = -2.0;
+                params.leftCurbType = "l_curb";
+                params.rightCurbType = "l_curb";
+                params.leftSidewalkActive = true;
+                params.leftSidewalkWidth = 1.5;
+                params.leftSidewalkSlope = -2.0;
+                params.rightSidewalkActive = true;
+                params.rightSidewalkWidth = 1.5;
+                params.rightSidewalkSlope = -2.0;
+                params.leftDitchActive = true;
+                params.rightDitchActive = true;
+                params.leftDitchSize = "400";
+                params.rightDitchSize = "400";
+                params.asphaltThick = 5;
+                params.baseThick = 10;
+                params.subbaseThick = 20;
+            } else {
+                return;
+            }
+
+            // UI 제어 바운딩 업데이트
+            updateUIFromParams();
+            calculateGeometry();
+            resetCamera(); // 프리셋 로딩 시 깔끔하게 자동 센터 피팅
+            showToast("설계 프리셋 적용 완료", "선택하신 설계 표준안이 모형에 로드되었습니다.");
+        }
+
+        function updateUIFromParams() {
+            document.getElementById('leftDist').value = params.leftDist;
+            document.getElementById('leftSlope').value = params.leftSlope;
+            document.getElementById('rightDist').value = params.rightDist;
+            document.getElementById('rightSlope').value = params.rightSlope;
+            
+            document.getElementById('leftCurbType').value = params.leftCurbType;
+            document.getElementById('rightCurbType').value = params.rightCurbType;
+            
+            document.getElementById('leftSidewalkActive').checked = params.leftSidewalkActive;
+            document.getElementById('leftSidewalkWidth').value = params.leftSidewalkWidth;
+            document.getElementById('leftSidewalkSlope').value = params.leftSidewalkSlope;
+            
+            document.getElementById('rightSidewalkActive').checked = params.rightSidewalkActive;
+            document.getElementById('rightSidewalkWidth').value = params.rightSidewalkWidth;
+            document.getElementById('rightSidewalkSlope').value = params.rightSidewalkSlope;
+            
+            document.getElementById('leftDitchActive').checked = params.leftDitchActive;
+            document.getElementById('leftDitchPreset').value = params.leftDitchSize;
+            document.getElementById('rightDitchActive').checked = params.rightDitchActive;
+            document.getElementById('rightDitchPreset').value = params.rightDitchSize;
+            
+            document.getElementById('asphaltThick').value = params.asphaltThick;
+            document.getElementById('baseThick').value = params.baseThick;
+            document.getElementById('subbaseThick').value = params.subbaseThick;
+            document.getElementById('cadScale').value = currentScale;
+
+            // 계획고 및 원지반 매핑 바인딩
+            document.getElementById('planHeight').value = params.planHeight || 10.00;
+            document.getElementById('groundHeight').value = params.groundHeight || 9.30;
+            document.getElementById('groundSlope').value = params.groundSlope || 0.0;
+            
+            // 텍스트 라벨 갱신
+            document.getElementById('asphaltText').innerText = params.asphaltThick + " cm";
+            document.getElementById('baseText').innerText = params.baseThick + " cm";
+            document.getElementById('subbaseText').innerText = params.subbaseThick + " cm";
+
+            toggleInputPanelsVisibility();
+        }
+
+        function toggleInputPanelsVisibility() {
+            // 인도 활성화 여부에 따른 하위 조절판 가시성
+            const leftSWDetail = document.getElementById('leftSidewalkDetail');
+            if (params.leftSidewalkActive) leftSWDetail.classList.remove('opacity-40', 'pointer-events-none');
+            else leftSWDetail.classList.add('opacity-40', 'pointer-events-none');
+
+            const rightSWDetail = document.getElementById('rightSidewalkDetail');
+            if (params.rightSidewalkActive) rightSWDetail.classList.remove('opacity-40', 'pointer-events-none');
+            else rightSWDetail.classList.add('opacity-40', 'pointer-events-none');
+
+            // 배수로 활성화 여부
+            const leftDitchDetail = document.getElementById('leftDitchDetail');
+            if (params.leftDitchActive) leftDitchDetail.classList.remove('opacity-40', 'pointer-events-none');
+            else leftDitchDetail.classList.add('opacity-40', 'pointer-events-none');
+
+            const rightDitchDetail = document.getElementById('rightDitchDetail');
+            if (params.rightDitchActive) rightDitchDetail.classList.remove('opacity-40', 'pointer-events-none');
+            else rightDitchDetail.classList.add('opacity-40', 'pointer-events-none');
+        }
+
+        // 레이어 토글
+        function toggleLayer(layerName) {
+            visibleLayers[layerName] = document.getElementById(`layer_${layerName}`).checked;
+            draw();
+        }
+
+        function setupInputListeners() {
+            const inputs = [
+                { id: 'leftDist', prop: 'leftDist', type: 'float' },
+                { id: 'leftSlope', prop: 'leftSlope', type: 'float' },
+                { id: 'rightDist', prop: 'rightDist', type: 'float' },
+                { id: 'rightSlope', prop: 'rightSlope', type: 'float' },
+                { id: 'leftCurbType', prop: 'leftCurbType', type: 'string' },
+                { id: 'rightCurbType', prop: 'rightCurbType', type: 'string' },
+                { id: 'leftSidewalkActive', prop: 'leftSidewalkActive', type: 'bool' },
+                { id: 'leftSidewalkWidth', prop: 'leftSidewalkWidth', type: 'float' },
+                { id: 'leftSidewalkSlope', prop: 'leftSidewalkSlope', type: 'float' },
+                { id: 'rightSidewalkActive', prop: 'rightSidewalkActive', type: 'bool' },
+                { id: 'rightSidewalkWidth', prop: 'rightSidewalkWidth', type: 'float' },
+                { id: 'rightSidewalkSlope', prop: 'rightSidewalkSlope', type: 'float' },
+                { id: 'leftDitchActive', prop: 'leftDitchActive', type: 'bool' },
+                { id: 'leftDitchPreset', prop: 'leftDitchSize', type: 'string' },
+                { id: 'rightDitchActive', prop: 'rightDitchActive', type: 'bool' },
+                { id: 'rightDitchPreset', prop: 'rightDitchSize', type: 'string' },
+                { id: 'asphaltThick', prop: 'asphaltThick', type: 'int', displayId: 'asphaltText', suffix: ' cm' },
+                { id: 'baseThick', prop: 'baseThick', type: 'int', displayId: 'baseText', suffix: ' cm' },
+                { id: 'subbaseThick', prop: 'subbaseThick', type: 'int', displayId: 'subbaseText', suffix: ' cm' },
+                { id: 'cadScale', prop: 'scale', type: 'int' },
+                
+                // 신규: 토공 계획고/원지반고 필드
+                { id: 'planHeight', prop: 'planHeight', type: 'float' },
+                { id: 'groundHeight', prop: 'groundHeight', type: 'float' },
+                { id: 'groundSlope', prop: 'groundSlope', type: 'float' }
+            ];
+
+            inputs.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (!el) return;
+
+                const updateVal = () => {
+                    let val;
+                    if (item.type === 'float') {
+                        val = parseFloat(el.value);
+                        if (isNaN(val)) val = 0;
+                    } else if (item.type === 'int') {
+                        val = parseInt(el.value);
+                        if (isNaN(val)) val = 0;
+                    } else if (item.type === 'bool') {
+                        val = el.checked;
+                    } else {
+                        val = el.value;
+                    }
+
+                    // 도면 축척(cadScale) 변경 시 글로벌 동기화 적용
+                    if (item.id === 'cadScale') {
+                        currentScale = val;
+                        stations.forEach(st => {
+                            st.params.scale = val;
+                        });
+                        params.scale = val;
+                    } else {
+                        params[item.prop] = val;
+                    }
+
+                    if (item.displayId) {
+                        document.getElementById(item.displayId).innerText = el.value + item.suffix;
+                    }
+
+                    // 실시간 파라미터 백업 연동
+                    const activeSt = stations.find(st => st.id === activeStationId);
+                    if (activeSt) {
+                        activeSt.params = JSON.parse(JSON.stringify(params));
+                    }
+
+                    toggleInputPanelsVisibility();
+                    calculateGeometry();
+                    draw();
+                };
+
+                el.addEventListener('input', updateVal);
+                el.addEventListener('change', updateVal);
+            });
+        }
+
+        function setupKeyboardShortcuts() {
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                if (e.key.toLowerCase() === 'r') {
+                    resetCamera();
+                    showToast("화면 정렬", "뷰포트 중심을 최적 배율로 리셋했습니다.");
+                } else if (e.key.toLowerCase() === 'e') {
+                    exportToDXF();
+                }
+            });
+        }
+
+        // 캔버스 드래그 및 마우스 제어 이벤트 바인딩
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startDragX = e.clientX - panX;
+            startDragY = e.clientY - panY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const cadX = (mouseX - canvas.width / 2 - panX) / zoomScale;
+            const cadY = -(mouseY - canvas.height / 2 - panY) / zoomScale;
+
+            document.getElementById('coordIndicator').innerText = 
+                `${(cadX / 1000).toFixed(3)}m, ${(cadY / 1000).toFixed(3)}m`;
+
+            if (isDragging) {
+                panX = e.clientX - startDragX;
+                panY = e.clientY - startDragY;
+                draw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => { isDragging = false; });
+        canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const cadXBefore = (mouseX - canvas.width / 2 - panX) / zoomScale;
+            const cadYBefore = -(mouseY - canvas.height / 2 - panY) / zoomScale;
+
+            if (e.deltaY < 0) zoomScale *= 1.15;
+            else zoomScale /= 1.15;
+
+            zoomScale = Math.max(0.002, Math.min(zoomScale, 2.0));
+
+            panX = mouseX - canvas.width / 2 - (cadXBefore * zoomScale);
+            panY = mouseY - canvas.height / 2 + (cadYBefore * zoomScale);
+
+            const scaleRatio = Math.round(100 / (zoomScale * 12.5));
+            document.getElementById('zoomFactorIndicator').innerText = `1:${scaleRatio}`;
+            draw();
+        });
+
+        // 태블릿 및 모바일 기기를 위한 정밀 터치(제스처) 이벤트 리스너 정의
+        function setupTouchInteractions() {
+            canvas.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                if (e.touches.length === 1) {
+                    startDragX = e.touches[0].clientX - panX;
+                    startDragY = e.touches[0].clientY - panY;
+                } else if (e.touches.length === 2) {
+                    // 손가락 두 개 핀치 제스처 초기 간격 수립
+                    touchStartDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+
+                if (e.touches.length === 1 && isDragging) {
+                    const touchX = e.touches[0].clientX - rect.left;
+                    const touchY = e.touches[0].clientY - rect.top;
+
+                    panX = e.touches[0].clientX - startDragX;
+                    panY = e.touches[0].clientY - startDragY;
+
+                    const cadX = (touchX - canvas.width / 2 - panX) / zoomScale;
+                    const cadY = -(touchY - canvas.height / 2 - panY) / zoomScale;
+                    document.getElementById('coordIndicator').innerText = 
+                        `${(cadX / 1000).toFixed(3)}m, ${(cadY / 1000).toFixed(3)}m`;
+                    draw();
+                } else if (e.touches.length === 2) {
+                    // 손가락 두 개 핀치 줌 기능 실시간 맵핑
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const factor = dist / (touchStartDist || 1);
+                    touchStartDist = dist;
+
+                    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+                    const cadXBefore = (midX - canvas.width / 2 - panX) / zoomScale;
+                    const cadYBefore = -(midY - canvas.height / 2 - panY) / zoomScale;
+
+                    zoomScale *= factor;
+                    zoomScale = Math.max(0.002, Math.min(zoomScale, 2.0));
+
+                    panX = midX - canvas.width / 2 - (cadXBefore * zoomScale);
+                    panY = midY - canvas.height / 2 + (cadYBefore * zoomScale);
+
+                    const scaleRatio = Math.round(100 / (zoomScale * 12.5));
+                    document.getElementById('zoomFactorIndicator').innerText = `1:${scaleRatio}`;
+                    draw();
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', () => {
+                isDragging = false;
+                touchStartDist = 0;
+            });
+        }
+
+        // 뷰포트 내 최적 정중앙 정렬 알고리즘 (멀티 측점 동시대응)
+        function resetCamera() {
+            if (geoElements.length === 0) {
+                panX = 0;
+                panY = 0;
+                zoomScale = 0.035;
+                draw();
+                return;
+            }
+
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            geoElements.forEach(elem => {
+                if (elem.layer === 'DATUM' || elem.layer === 'GRID') return;
+
+                if (elem.type === 'line' || elem.type === 'arrow') {
+                    minX = Math.min(minX, elem.x1, elem.x2);
+                    maxX = Math.max(maxX, elem.x1, elem.x2);
+                    minY = Math.min(minY, elem.y1, elem.y2);
+                    maxY = Math.max(maxY, elem.y1, elem.y2);
+                } else if (elem.type === 'polyline') {
+                    elem.points.forEach(pt => {
+                        minX = Math.min(minX, pt.x);
+                        maxX = Math.max(maxX, pt.x);
+                        minY = Math.min(minY, pt.y);
+                        maxY = Math.max(maxY, pt.y);
+                    });
+                } else if (elem.type === 'text') {
+                    minX = Math.min(minX, elem.x);
+                    maxX = Math.max(maxX, elem.x);
+                    minY = Math.min(minY, elem.y);
+                    maxY = Math.max(maxY, elem.y);
+                }
+            });
+
+            if (minX === Infinity || maxX === -Infinity) {
+                minX = -10000; maxX = 10000;
+                minY = -2000; maxY = 2000;
+            }
+
+            const geoW = (maxX - minX) || 1000;
+            const geoH = (maxY - minY) || 1000;
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            const paddingScale = 0.75;
+            const autoScaleX = (canvas.width * paddingScale) / geoW;
+            const autoScaleY = (canvas.height * paddingScale) / geoH;
+            
+            zoomScale = Math.min(autoScaleX, autoScaleY);
+            // 전체 보기 모드 시 축척 축소 유연성 상향
+            zoomScale = Math.max(0.001, Math.min(zoomScale, 0.4));
+
+            panX = -centerX * zoomScale;
+            panY = centerY * zoomScale;
+
+            const scaleRatio = Math.round(100 / (zoomScale * 12.5));
+            document.getElementById('zoomFactorIndicator').innerText = `1:${scaleRatio}`;
+            
+            draw();
+        }
+
+        // 도면 해칭 사선 연산 생성 모듈 (Canvas & DXF 통합 레이어 드로잉 보장)
+        function generateHatchLines(poly, spacing, angleDeg, layer, color, lineWidth) {
+            const hatchElements = [];
+            if (poly.length < 3) return hatchElements;
+
+            const angle = angleDeg * Math.PI / 180;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+
+            // 평면 투영 정규 법선 생성
+            const nx = -sinA;
+            const ny = cosA;
+
+            let minD = Infinity;
+            let maxD = -Infinity;
+            poly.forEach(p => {
+                const d = p.x * nx + p.y * ny;
+                if (d < minD) minD = d;
+                if (d > maxD) maxD = d;
+            });
+
+            // 오프셋 루프를 돌며 경계선 교차점 검출 및 사선 형성
+            for (let d = minD + spacing; d < maxD; d += spacing) {
+                const intersections = [];
+                for (let i = 0; i < poly.length; i++) {
+                    const p1 = poly[i];
+                    const p2 = poly[(i + 1) % poly.length];
+
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const denominator = dx * nx + dy * ny;
+
+                    if (Math.abs(denominator) > 1e-6) {
+                        const t = (d - (p1.x * nx + p1.y * ny)) / denominator;
+                        if (t >= 0 && t <= 1) {
+                            intersections.push({
+                                x: p1.x + t * dx,
+                                y: p1.y + t * dy
+                            });
+                        }
+                    }
+                }
+
+                // 기하 투영 정렬
+                intersections.sort((a, b) => {
+                    const projA = a.x * cosA + a.y * sinA;
+                    const projB = b.x * cosA + b.y * sinA;
+                    return projA - projB;
+                });
+
+                // 한 쌍씩 연결
+                for (let i = 0; i < intersections.length - 1; i += 2) {
+                    hatchElements.push({
+                        type: 'line',
+                        x1: intersections[i].x,
+                        y1: intersections[i].y,
+                        x2: intersections[i + 1].x,
+                        y2: intersections[i + 1].y,
+                        layer: layer,
+                        color: color,
+                        width: lineWidth
+                    });
+                }
+            }
+            return hatchElements;
+        }
+
+        // 단일 측점 횡단면 기하 구조 및 다이내믹 주석 연산
+        function generateStationGeometry(stParams, offsetY, stationName, S) {
+            let elements = [];
+
+            // 단위 변환: m -> mm, cm -> mm
+            const WL = stParams.leftDist * 1000;
+            const WR = stParams.rightDist * 1000;
+            const SL = stParams.leftSlope / 100;
+            const SR = stParams.rightSlope / 100;
+
+            const d1 = stParams.asphaltThick * 10;
+            const d2 = stParams.baseThick * 10;
+            const d3 = stParams.subbaseThick * 10;
+            const totalThick = d1 + d2 + d3;
+
+            // 축척에 연동되는 폰트 및 주석 규격 (기준값 x 축척)
+            const textLg = 3.0 * S;        
+            const textSm = 2.4 * S;        
+            const dimOffsetOuter = 20 * S;  
+            const dimOffsetInner = 8 * S;   
+            const tickLen = 1.6 * S;        
+            const arrowLen = 3.5 * S;       
+            const arrowSpacingY = 2.0 * S;  
+            const arrowSpacingX = 5.0 * S;  
+            const textSpacingY = 5.0 * S;   
+            const datumSpacingY = 25 * S;   
+
+            // 도로면 최고점 CL을 중심원으로 함
+            const CL_X = 0;
+            const CL_Y = offsetY;
+
+            // 차도 좌측 끝점
+            const L_RoadX = -WL;
+            const L_RoadY = offsetY + WL * SL; 
+
+            // 차도 우측 끝점
+            const R_RoadX = WR;
+            const R_RoadY = offsetY + WR * SR; 
+
+            // 타이틀 타이틀 텍스트 추가
+            elements.push({
+                type: 'text', x: 0, y: offsetY + 42 * S,
+                text: `[ ${stationName} 횡단면도 ]`, size: textLg * 1.3, align: 'center',
+                layer: 'CENTER', color: '#818cf8'
+            });
+
+            // 1. 차도 포장라인 그리기 (ROAD Layer)
+            elements.push({
+                type: 'line', x1: L_RoadX, y1: L_RoadY, x2: CL_X, y2: CL_Y,
+                layer: 'ROAD', color: '#22c55e', width: 3.5
+            });
+            elements.push({
+                type: 'line', x1: CL_X, y1: CL_Y, x2: R_RoadX, y2: R_RoadY,
+                layer: 'ROAD', color: '#22c55e', width: 3.5
+            });
+
+            // 1-1. 차도 내부 포장 레이어 (PAVEMENT Layer)
+            const roadLayers = [
+                { t: d1, name: '아스콘 표층', color: '#fbbf24' }, 
+                { t: d1 + d2, name: '기층', color: '#f59e0b' },
+                { t: totalThick, name: '보조기층', color: '#b45309' }
+            ];
+
+            roadLayers.forEach(ly => {
+                const dy = ly.t;
+                elements.push({
+                    type: 'line', x1: L_RoadX, y1: L_RoadY - dy, x2: CL_X, y2: CL_Y - dy,
+                    layer: 'PAVEMENT', color: ly.color, width: 1.5
+                });
+                elements.push({
+                    type: 'line', x1: CL_X, y1: CL_Y - dy, x2: R_RoadX, y2: R_RoadY - dy,
+                    layer: 'PAVEMENT', color: ly.color, width: 1.5
+                });
+            });
+
+            // 포장 레이어 양측 수직선
+            elements.push({
+                type: 'line', x1: L_RoadX, y1: L_RoadY, x2: L_RoadX, y2: L_RoadY - totalThick,
+                layer: 'PAVEMENT', color: '#b45309', width: 1.5
+            });
+            elements.push({
+                type: 'line', x1: R_RoadX, y1: R_RoadY, x2: R_RoadX, y2: R_RoadY - totalThick,
+                layer: 'PAVEMENT', color: '#b45309', width: 1.5
+            });
+
+            // 2. 좌측 경계석 & 지지 콘크리트 완벽 형상 설계 (image_2ba20f.png 스펙 완벽 대칭 반영)
+            let curL_X = L_RoadX;
+            let curL_Y = L_RoadY;
+
+            if (stParams.leftCurbType === 'l_curb') {
+                // 화강석 경계석 (200x250, 30mm 모따기 적용)
+                const granitePoly = [
+                    { x: -WL - 500, y: L_RoadY - 20 },
+                    { x: -WL - 700, y: L_RoadY - 20 },
+                    { x: -WL - 700, y: L_RoadY + 230 },
+                    { x: -WL - 530, y: L_RoadY + 230 }, // 모따기
+                    { x: -WL - 500, y: L_RoadY + 200 }
+                ];
+                elements.push({
+                    type: 'polyline', points: granitePoly, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 3.0
+                });
+
+                // 기초 콘크리트 베드 (폭 750, 좌측 apron 500, 구배 4%)
+                const concreteBasePoly = [
+                    { x: -WL, y: L_RoadY },
+                    { x: -WL - 500, y: L_RoadY + 20 }, // 구배 4% 높이 +20
+                    { x: -WL - 500, y: L_RoadY - 20 }, // 매립 턱 -20
+                    { x: -WL - 700, y: L_RoadY - 20 }, 
+                    { x: -WL - 700, y: L_RoadY + 30 }, // 뒷채움 턱 높이 +30
+                    { x: -WL - 750, y: L_RoadY + 30 }, // 지지폭 50
+                    { x: -WL - 750, y: L_RoadY - 220 }, // 두께 200
+                    { x: -WL, y: L_RoadY - 220 }
+                ];
+                elements.push({
+                    type: 'polyline', points: concreteBasePoly, closed: true,
+                    layer: 'CURB', color: '#10b981', width: 2.0
+                });
+
+                // 해칭 라인 수립
+                const curbHatches = generateHatchLines(granitePoly, 12 * S, 45, 'HATCH', '#ef4444', 0.8);
+                const baseHatches = generateHatchLines(concreteBasePoly, 25 * S, 135, 'HATCH', '#475569', 0.6);
+                elements = elements.concat(curbHatches);
+                elements = elements.concat(baseHatches);
+
+                // 치수 주석 (상세 레이어)
+                addDimensionToElements(elements, -WL - 750, L_RoadY - 250, -WL, L_RoadY - 250, 0, "750", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, -WL - 500, L_RoadY + 60, -WL, L_RoadY + 40, 0, "500", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, -WL - 700, L_RoadY + 260, -WL - 500, L_RoadY + 260, 0, "200", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, -WL - 750, L_RoadY + 60, -WL - 700, L_RoadY + 60, 0, "50", tickLen, textSm, 'DIM_DETAIL', S);
+
+                addDimensionToElements(elements, -WL - 780, L_RoadY - 220, -WL - 780, L_RoadY + 30, 0, "250", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, -WL - 820, L_RoadY - 220, -WL - 820, L_RoadY + 230, 0, "450", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, -WL, L_RoadY - 220, -WL, L_RoadY, 0, "220", tickLen, textSm, 'DIM_DETAIL', S);
+
+                elements.push({
+                    type: 'text', x: -WL - 250, y: L_RoadY + 22 * S,
+                    text: "S = 4%", size: textSm * 0.9, align: 'center',
+                    layer: 'DIM_DETAIL', color: '#ef4444'
+                });
+                drawSlopeArrowElements(elements, -WL - 150, L_RoadY + 14 * S, -WL - 350, L_RoadY + 14 * S, -4, arrowLen);
+
+                curL_X = -WL - 750;
+                curL_Y = L_RoadY + 30;
+            } else if (stParams.leftCurbType === 'r_curb') {
+                const points = [
+                    { x: curL_X, y: curL_Y },
+                    { x: curL_X, y: curL_Y - 150 },
+                    { x: curL_X - 150, y: curL_Y - 150 },
+                    { x: curL_X - 150, y: curL_Y + 50 },
+                    { x: curL_X, y: curL_Y + 50 }
+                ];
+                elements.push({
+                    type: 'polyline', points: points, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 2.5
+                });
+                curL_X = curL_X - 150;
+                curL_Y = curL_Y + 50;
+            }
+
+            // 좌측 인도부 (보도블럭) 설치
+            let swL_StartX = curL_X;
+            let swL_StartY = curL_Y;
+            if (stParams.leftSidewalkActive) {
+                const swW = stParams.leftSidewalkWidth * 1000;
+                const swS = stParams.leftSidewalkSlope / 100;
+                
+                const swEndX = swL_StartX - swW;
+                const swEndY = swL_StartY + (swW * swS);
+
+                elements.push({
+                    type: 'line', x1: swL_StartX, y1: swL_StartY, x2: swEndX, y2: swEndY,
+                    layer: 'SIDEWALK', color: '#eab308', width: 3.0
+                });
+
+                const swLayers = [80, 120, 220];
+                const swColors = ['#fef08a', '#fef9c3', '#ca8a04'];
+                swLayers.forEach((t, i) => {
+                    elements.push({
+                        type: 'line', x1: swL_StartX, y1: swL_StartY - t, x2: swEndX, y2: swEndY - t,
+                        layer: 'SIDEWALK', color: swColors[i], width: 1.0
+                    });
+                });
+                elements.push({
+                    type: 'line', x1: swEndX, y1: swEndY, x2: swEndX, y2: swEndY - 220,
+                    layer: 'SIDEWALK', color: '#ca8a04', width: 1.0
+                });
+
+                addDimensionToElements(elements, swEndX, swEndY, swL_StartX, swL_StartY, dimOffsetInner + 5 * S, `인도 B=${stParams.leftSidewalkWidth.toFixed(1)}m`, tickLen, textSm, 'SIDEWALK', S);
+
+                curL_X = swEndX;
+                curL_Y = swEndY;
+            }
+
+            // 3. 우측 경계석 & 인도부 연산 (L형 스펙 대칭 반영)
+            let curR_X = R_RoadX;
+            let curR_Y = R_RoadY;
+
+            if (stParams.rightCurbType === 'l_curb') {
+                const granitePoly = [
+                    { x: WR + 500, y: R_RoadY - 20 },
+                    { x: WR + 700, y: R_RoadY - 20 },
+                    { x: WR + 700, y: R_RoadY + 230 },
+                    { x: WR + 530, y: R_RoadY + 230 }, 
+                    { x: WR + 500, y: R_RoadY + 200 }
+                ];
+                elements.push({
+                    type: 'polyline', points: granitePoly, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 3.0
+                });
+
+                const concreteBasePoly = [
+                    { x: WR, y: R_RoadY },
+                    { x: WR + 500, y: R_RoadY + 20 },
+                    { x: WR + 500, y: R_RoadY - 20 },
+                    { x: WR + 700, y: R_RoadY - 20 },
+                    { x: WR + 700, y: R_RoadY + 30 },
+                    { x: WR + 750, y: R_RoadY + 30 },
+                    { x: WR + 750, y: R_RoadY - 220 },
+                    { x: WR, y: R_RoadY - 220 }
+                ];
+                elements.push({
+                    type: 'polyline', points: concreteBasePoly, closed: true,
+                    layer: 'CURB', color: '#10b981', width: 2.0
+                });
+
+                // 해칭 라인 바인딩
+                const curbHatches = generateHatchLines(granitePoly, 12 * S, 45, 'HATCH', '#ef4444', 0.8);
+                const baseHatches = generateHatchLines(concreteBasePoly, 25 * S, 135, 'HATCH', '#475569', 0.6);
+                elements = elements.concat(curbHatches);
+                elements = elements.concat(baseHatches);
+
+                // 우측 디테일 치수 주석
+                addDimensionToElements(elements, WR, R_RoadY - 250, WR + 750, R_RoadY - 250, 0, "750", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, WR, R_RoadY + 40, WR + 500, R_RoadY + 60, 0, "500", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, WR + 500, R_RoadY + 260, WR + 700, R_RoadY + 260, 0, "200", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, WR + 700, R_RoadY + 60, WR + 750, R_RoadY + 60, 0, "50", tickLen, textSm, 'DIM_DETAIL', S);
+
+                addDimensionToElements(elements, WR + 780, R_RoadY - 220, WR + 780, R_RoadY + 30, 0, "250", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, WR + 820, R_RoadY - 220, WR + 820, R_RoadY + 230, 0, "450", tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, WR, R_RoadY - 220, WR, R_RoadY, 0, "220", tickLen, textSm, 'DIM_DETAIL', S);
+
+                elements.push({
+                    type: 'text', x: WR + 250, y: R_RoadY + 22 * S,
+                    text: "S = 4%", size: textSm * 0.9, align: 'center',
+                    layer: 'DIM_DETAIL', color: '#ef4444'
+                });
+                drawSlopeArrowElements(elements, WR + 350, R_RoadY + 14 * S, WR + 150, R_RoadY + 14 * S, -4, arrowLen);
+
+                curR_X = WR + 750;
+                curR_Y = R_RoadY + 30;
+            } else if (stParams.rightCurbType === 'r_curb') {
+                const points = [
+                    { x: curR_X, y: curR_Y },
+                    { x: curR_X, y: curR_Y - 150 },
+                    { x: curR_X + 150, y: curR_Y - 150 },
+                    { x: curR_X + 150, y: curR_Y + 50 },
+                    { x: curR_X, y: curR_Y + 50 }
+                ];
+                elements.push({
+                    type: 'polyline', points: points, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 2.5
+                });
+                curR_X = curR_X + 150;
+                curR_Y = curR_Y + 50;
+            }
+
+            // 우측 인도부 (보도블럭) 설치
+            let swR_StartX = curR_X;
+            let swR_StartY = curR_Y;
+            if (stParams.rightSidewalkActive) {
+                const swW = stParams.rightSidewalkWidth * 1000;
+                const swS = stParams.rightSidewalkSlope / 100;
+                
+                const swEndX = swR_StartX + swW;
+                const swEndY = swR_StartY + (swW * swS);
+
+                elements.push({
+                    type: 'line', x1: swR_StartX, y1: swR_StartY, x2: swEndX, y2: swEndY,
+                    layer: 'SIDEWALK', color: '#eab308', width: 3.0
+                });
+
+                const swLayers = [80, 120, 220];
+                const swColors = ['#fef08a', '#fef9c3', '#ca8a04'];
+                swLayers.forEach((t, i) => {
+                    elements.push({
+                        type: 'line', x1: swR_StartX, y1: swR_StartY - t, x2: swEndX, y2: swEndY - t,
+                        layer: 'SIDEWALK', color: swColors[i], width: 1.0
+                    });
+                });
+                elements.push({
+                    type: 'line', x1: swEndX, y1: swEndY, x2: swEndX, y2: swEndY - 220,
+                    layer: 'SIDEWALK', color: '#ca8a04', width: 1.0
+                });
+
+                addDimensionToElements(elements, swR_StartX, swR_StartY, swEndX, swEndY, dimOffsetInner + 5 * S, `인도 B=${stParams.rightSidewalkWidth.toFixed(1)}m`, tickLen, textSm, 'SIDEWALK', S);
+
+                curR_X = swEndX;
+                curR_Y = swEndY;
+            }
+
+            // 4. 좌측 기성 U형 수로관 설치 (배수로)
+            if (stParams.leftDitchActive) {
+                const spec = DITCH_DATABASE[stParams.leftDitchSize];
+                if (spec) {
+                    const w = spec.innerW;
+                    const h = spec.innerH;
+                    const t = spec.wallT;
+                    const tb = spec.bottomT;
+
+                    const ditchPoints = [
+                        { x: curL_X, y: curL_Y },
+                        { x: curL_X - t, y: curL_Y },
+                        { x: curL_X - t, y: curL_Y - h },
+                        { x: curL_X - t - w, y: curL_Y - h },
+                        { x: curL_X - t - w, y: curL_Y },
+                        { x: curL_X - t - w - t, y: curL_Y },
+                        { x: curL_X - 2*t - w, y: curL_Y - h - tb },
+                        { x: curL_X, y: curL_Y - h - tb }
+                    ];
+
+                    elements.push({
+                        type: 'polyline', points: ditchPoints, closed: true,
+                        layer: 'UDITCH', color: '#22d3ee', width: 2.5
+                    });
+
+                    elements.push({
+                        type: 'text', x: curL_X - (w/2 + t), y: curL_Y + 5 * S,
+                        text: `U형 수로관 ${w}`, size: textSm, align: 'center',
+                        layer: 'UDITCH', color: '#22d3ee'
+                    });
+
+                    addDimensionToElements(elements, curL_X - (t*2 + w), curL_Y, curL_X, curL_Y, dimOffsetInner, `U-${w}`, tickLen, textSm, 'UDITCH', S);
+
+                    curL_X = curL_X - (t*2 + w); // 최외각 포인트 갱신
+                }
+            }
+
+            // 5. 우측 기성 U형 수로관 설치 (배수로)
+            if (stParams.rightDitchActive) {
+                const spec = DITCH_DATABASE[stParams.rightDitchSize];
+                if (spec) {
+                    const w = spec.innerW;
+                    const h = spec.innerH;
+                    const t = spec.wallT;
+                    const tb = spec.bottomT;
+
+                    const ditchPoints = [
+                        { x: curR_X, y: curR_Y },
+                        { x: curR_X + t, y: curR_Y },
+                        { x: curR_X + t, y: curR_Y - h },
+                        { x: curR_X + t + w, y: curR_Y - h },
+                        { x: curR_X + t + w, y: curR_Y },
+                        { x: curR_X + t + w + t, y: curR_Y },
+                        { x: curR_X + 2*t + w, y: curR_Y - h - tb },
+                        { x: curR_X, y: curR_Y - h - tb }
+                    ];
+
+                    elements.push({
+                        type: 'polyline', points: ditchPoints, closed: true,
+                        layer: 'UDITCH', color: '#22d3ee', width: 2.5
+                    });
+
+                    elements.push({
+                        type: 'text', x: curR_X + (w/2 + t), y: curR_Y + 5 * S,
+                        text: `U형 수로관 ${w}`, size: textSm, align: 'center',
+                        layer: 'UDITCH', color: '#22d3ee'
+                    });
+
+                    addDimensionToElements(elements, curR_X, curR_Y, curR_X + (t*2 + w), curR_Y, dimOffsetInner, `U-${w}`, tickLen, textSm, 'UDITCH', S);
+
+                    curR_X = curR_X + (t*2 + w); // 최외각 포인트 갱신
+                }
+            }
+
+            // 5-1. 계획고 FH 대비 원지반 GH 표출 및 법면 사면 라인 매핑
+            const planElev = stParams.planHeight || 10.00;
+            const groundElev = stParams.groundHeight || 9.30;
+            const groundSl = (stParams.groundSlope || 0.0) / 100;
+
+            // 원지반선은 CL 기준 계획고 대비 상대 높이 차에서 시작
+            const CL_GroundY = offsetY - (planElev - groundElev) * 1000;
+
+            const groundLineX1 = -WL - 5000;
+            const groundLineY1 = CL_GroundY + groundLineX1 * groundSl;
+            const groundLineX2 = WR + 5000;
+            const groundLineY2 = CL_GroundY + groundLineX2 * groundSl;
+
+            elements.push({
+                type: 'line', x1: groundLineX1, y1: groundLineY1, x2: groundLineX2, y2: groundLineY2,
+                layer: 'GROUND', color: '#92400e', width: 2.0, dash: [8, 4]
+            });
+            elements.push({
+                type: 'text', x: WR + 4000, y: groundLineY2 + 4 * S,
+                text: `원지반 GH = ${groundElev.toFixed(2)}m`, size: textSm, align: 'right',
+                layer: 'GROUND', color: '#b45309'
+            });
+
+            // 좌측 최외외곽점 (curL_X, curL_Y)에서 원지반선으로의 사면 매핑
+            // Ground Y at curL_X:
+            const groundY_L = CL_GroundY + curL_X * groundSl;
+            let slopeL_X = curL_X;
+            let slopeL_Y = curL_Y;
+
+            if (curL_Y > groundY_L) {
+                // 성토 (Fill, 1:1.5 slope) -> 좌측 아래로 내려감. dy/dx = 1/1.5
+                // Y - curL_Y = (1/1.5) * (X - curL_X).
+                // 원지반선: Y = CL_GroundY + X * groundSl.
+                // intersection X:
+                const S_s = 1.0 / 1.5;
+                const C_s = curL_Y - S_s * curL_X;
+                const C_g = CL_GroundY;
+                const S_g = groundSl;
+
+                const intX = (C_g - C_s) / (S_s - S_g);
+                const intY = S_s * intX + C_s;
+
+                if (intX < curL_X) {
+                    elements.push({
+                        type: 'line', x1: curL_X, y1: curL_Y, x2: intX, y2: intY,
+                        layer: 'GROUND', color: '#ca8a04', width: 2.5
+                    });
+                    elements.push({
+                        type: 'text', x: (curL_X + intX)/2, y: (curL_Y + intY)/2 + 4 * S,
+                        text: "성토사면 1:1.5", size: textSm * 0.8, align: 'center',
+                        layer: 'GROUND', color: '#eab308'
+                    });
+                    slopeL_X = intX;
+                    slopeL_Y = intY;
+                }
+            } else {
+                // 절토 (Cut, 1:1.2 slope) -> 좌측 위로 올라감. dy/dx = -1/1.2
+                const S_s = -1.0 / 1.2;
+                const C_s = curL_Y - S_s * curL_X;
+                const C_g = CL_GroundY;
+                const S_g = groundSl;
+
+                const intX = (C_g - C_s) / (S_s - S_g);
+                const intY = S_s * intX + C_s;
+
+                if (intX < curL_X) {
+                    elements.push({
+                        type: 'line', x1: curL_X, y1: curL_Y, x2: intX, y2: intY,
+                        layer: 'GROUND', color: '#ef4444', width: 2.5
+                    });
+                    elements.push({
+                        type: 'text', x: (curL_X + intX)/2, y: (curL_Y + intY)/2 + 4 * S,
+                        text: "절토사면 1:1.2", size: textSm * 0.8, align: 'center',
+                        layer: 'GROUND', color: '#f87171'
+                    });
+                    slopeL_X = intX;
+                    slopeL_Y = intY;
+                }
+            }
+
+            // 우측 최외곽점 (curR_X, curR_Y)에서 원지반선으로의 사면 매핑
+            const groundY_R = CL_GroundY + curR_X * groundSl;
+            let slopeR_X = curR_X;
+            let slopeR_Y = curR_Y;
+
+            if (curR_Y > groundY_R) {
+                // 성토 (Fill, 1:1.5 slope) -> 우측 아래로 내려감. dy/dx = -1/1.5
+                const S_s = -1.0 / 1.5;
+                const C_s = curR_Y - S_s * curR_X;
+                const C_g = CL_GroundY;
+                const S_g = groundSl;
+
+                const intX = (C_g - C_s) / (S_s - S_g);
+                const intY = S_s * intX + C_s;
+
+                if (intX > curR_X) {
+                    elements.push({
+                        type: 'line', x1: curR_X, y1: curR_Y, x2: intX, y2: intY,
+                        layer: 'GROUND', color: '#ca8a04', width: 2.5
+                    });
+                    elements.push({
+                        type: 'text', x: (curR_X + intX)/2, y: (curR_Y + intY)/2 + 4 * S,
+                        text: "성토사면 1:1.5", size: textSm * 0.8, align: 'center',
+                        layer: 'GROUND', color: '#eab308'
+                    });
+                    slopeR_X = intX;
+                    slopeR_Y = intY;
+                }
+            } else {
+                // 절토 (Cut, 1:1.2) -> 우측 위로 올라감. dy/dx = 1/1.2
+                const S_s = 1.0 / 1.2;
+                const C_s = curR_Y - S_s * curR_X;
+                const C_g = CL_GroundY;
+                const S_g = groundSl;
+
+                const intX = (C_g - C_s) / (S_s - S_g);
+                const intY = S_s * intX + C_s;
+
+                if (intX > curR_X) {
+                    elements.push({
+                        type: 'line', x1: curR_X, y1: curR_Y, x2: intX, y2: intY,
+                        layer: 'GROUND', color: '#ef4444', width: 2.5
+                    });
+                    elements.push({
+                        type: 'text', x: (curR_X + intX)/2, y: (curR_Y + intY)/2 + 4 * S,
+                        text: "절토사면 1:1.2", size: textSm * 0.8, align: 'center',
+                        layer: 'GROUND', color: '#f87171'
+                    });
+                    slopeR_X = intX;
+                    slopeR_Y = intY;
+                }
+            }
+
+            // 6. 구배 및 도로폭 치수선
+            addDimensionToElements(elements, -WL, L_RoadY, 0, CL_Y, dimOffsetOuter, `B = ${stParams.leftDist.toFixed(2)}m`, tickLen, textSm, 'DIMENSION', S);
+            const halfLX = -WL / 2;
+            const halfLY = CL_Y + halfLX * SL;
+            elements.push({
+                type: 'text', x: halfLX, y: halfLY + textSpacingY,
+                text: `S = ${stParams.leftSlope.toFixed(1)}%`, size: textSm, align: 'center',
+                layer: 'DIMENSION', color: '#f87171'
+            });
+            drawSlopeArrowElements(elements, halfLX + arrowSpacingX, halfLY + arrowSpacingY, halfLX - arrowSpacingX, halfLY + arrowSpacingY, stParams.leftSlope, arrowLen);
+
+            addDimensionToElements(elements, 0, CL_Y, WR, R_RoadY, dimOffsetOuter, `B = ${stParams.rightDist.toFixed(2)}m`, tickLen, textSm, 'DIMENSION', S);
+            const halfRX = WR / 2;
+            const halfRY = CL_Y + halfRX * SR;
+            elements.push({
+                type: 'text', x: halfRX, y: halfRY + textSpacingY,
+                text: `S = ${stParams.rightSlope.toFixed(1)}%`, size: textSm, align: 'center',
+                layer: 'DIMENSION', color: '#f87171'
+            });
+            drawSlopeArrowElements(elements, halfRX - arrowSpacingX, halfRY + arrowSpacingY, halfRX + arrowSpacingX, halfRY + arrowSpacingY, stParams.rightSlope, arrowLen);
+
+            // 7. 중심선 (Center Line)
+            elements.push({
+                type: 'line', x1: 0, y1: CL_Y + 15 * S, x2: 0, y2: CL_Y - (totalThick + 10 * S),
+                layer: 'CENTER', color: '#f43f5e', width: 2, dash: [12, 6, 2, 6] 
+            });
+            elements.push({
+                type: 'text', x: 0, y: CL_Y + 18 * S,
+                text: 'C.L', size: textLg, align: 'center',
+                layer: 'CENTER', color: '#f43f5e'
+            });
+
+            // 8. DATUM 기준선 (계획고 FH 기준 매핑 계산)
+            const lowestY = Math.min(L_RoadY - totalThick, R_RoadY - totalThick, curL_Y - 600, curR_Y - 600, slopeL_Y, slopeR_Y);
+            // 깔끔하게 정수형 DL 유닛 구축
+            const datumDLVal = Math.floor(planElev - 3.0);
+            const datumY = offsetY - (planElev - datumDLVal) * 1000;
+
+            elements.push({
+                type: 'line', x1: -WL - 40 * S, y1: datumY, x2: WR + 40 * S, y2: datumY,
+                layer: 'DATUM', color: '#64748b', width: 1
+            });
+            elements.push({
+                type: 'text', x: -WL - 35 * S, y: datumY + 2.4 * S,
+                text: `DATUM DL = ${datumDLVal.toFixed(2)}m (FH=${planElev.toFixed(2)}m)`, size: textSm * 1.05, align: 'left',
+                layer: 'DATUM', color: '#94a3b8'
+            });
+
+            return elements;
+        }
+
+        // 전체 도형 구조 병합 및 렌더링용 변환 계산
+        function calculateGeometry() {
+            geoElements = [];
+            const S = currentScale;
+
+            if (viewAllStationsMode) {
+                // 저장된 모든 측점을 아래로 차례차례 쌓아가며 계산 (간격: 25000 mm = 25 m)
+                stations.forEach((st, index) => {
+                    const offsetY = -index * 25000;
+                    const formattedName = getStationName(st.distance);
+                    const stGeo = generateStationGeometry(st.params, offsetY, formattedName, S);
+                    geoElements = geoElements.concat(stGeo);
+                });
+            } else {
+                // 현재 수정 모드 측점만 노출
+                const activeSt = stations.find(st => st.id === activeStationId);
+                const currentName = activeSt ? getStationName(activeSt.distance) : "설계 단면";
+                geoElements = generateStationGeometry(params, 0, currentName, S);
+            }
+
+            // 우측 디스플레이 동기화용 연산 갱신 (Active params 기준)
+            const WL = params.leftDist * 1000;
+            const WR = params.rightDist * 1000;
+            const L_RoadY = WL * (params.leftSlope / 100);
+            const R_RoadY = WR * (params.rightSlope / 100);
+
+            const activePlanElev = params.planHeight || 10.00;
+            const activeGroundElev = params.groundHeight || 9.30;
+            const groundDiff = activePlanElev - activeGroundElev;
+            const cutFillLabel = groundDiff >= 0 ? `${groundDiff.toFixed(3)} m (성토부)` : `${Math.abs(groundDiff).toFixed(3)} m (절토부)`;
+
+            // 요소가 존재할 때만 내부 텍스트를 할당하도록 방어 가드 코드 적용
+            const elTotalPavementThick = document.getElementById('totalPavementThick');
+            if (elTotalPavementThick) elTotalPavementThick.innerText = `${params.asphaltThick + params.baseThick + params.subbaseThick} cm`;
+
+            const elTotalRoadWidth = document.getElementById('totalRoadWidth');
+            if (elTotalRoadWidth) elTotalRoadWidth.innerText = `${(params.leftDist + params.rightDist).toFixed(2)} m`;
+
+            const elSidewalkWidthText = document.getElementById('sidewalkWidthText');
+            if (elSidewalkWidthText) {
+                elSidewalkWidthText.innerText = `${params.leftSidewalkActive ? params.leftSidewalkWidth.toFixed(2) + 'm' : '없음'} / ${params.rightSidewalkActive ? params.rightSidewalkWidth.toFixed(2) + 'm' : '없음'}`;
+            }
+
+            const elCenterElevationText = document.getElementById('centerElevationText');
+            if (elCenterElevationText) elCenterElevationText.innerText = `${activePlanElev.toFixed(3)} m`;
+
+            const elLeftEdgeHeight = document.getElementById('leftEdgeHeight');
+            if (elLeftEdgeHeight) elLeftEdgeHeight.innerText = `${(activePlanElev + L_RoadY / 1000).toFixed(3)} m`;
+
+            const elRightEdgeHeight = document.getElementById('rightEdgeHeight');
+            if (elRightEdgeHeight) elRightEdgeHeight.innerText = `${(activePlanElev + R_RoadY / 1000).toFixed(3)} m`;
+
+            const elGroundDiffText = document.getElementById('groundDiffText');
+            if (elGroundDiffText) elGroundDiffText.innerText = cutFillLabel;
+
+            updateDitchDetailsPanel();
+            updateQuantityEstimationPanel(); // 수량 산출 집계 실시간 연산
+        }
+
+        // 구배 흐름선 지시 화살표 계산기
+        function drawSlopeArrowElements(elements, x1, y1, x2, y2, slopeValue, arrowLen) {
+            let fromX = x1, fromY = y1, toX = x2, toY = y2;
+            if (slopeValue > 0) {
+                fromX = x2; fromY = y2;
+                toX = x1; toY = y1;
+            }
+            elements.push({
+                type: 'arrow', x1: fromX, y1: fromY, x2: toX, y2: toY,
+                arrowHeadSize: arrowLen, layer: 'DIMENSION', color: '#f87171', width: 1.5
+            });
+        }
+
+        // 치수 보조 라인 자동 계산기
+        function addDimensionToElements(elements, x1, y1, x2, y2, offset, labelText, tickLen, fontSize, customLayer, S) {
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const perpAngle = angle + Math.PI / 2;
+
+            const dx = Math.cos(perpAngle) * offset;
+            const dy = Math.sin(perpAngle) * offset;
+
+            const dimX1 = x1 + dx;
+            const dimY1 = y1 + dy;
+            const dimX2 = x2 + dx;
+            const dimY2 = y2 + dy;
+
+            const dimColor = '#ef4444';
+
+            elements.push({
+                type: 'line', x1: dimX1, y1: dimY1, x2: dimX2, y2: dimY2,
+                layer: customLayer, color: dimColor, width: 1.2
+            });
+
+            elements.push({
+                type: 'line', x1: x1 + Math.cos(perpAngle) * (offset * 0.1), y1: y1 + Math.sin(perpAngle) * (offset * 0.1),
+                x2: dimX1 + Math.cos(perpAngle) * (offset * 0.15), y2: dimY1 + Math.sin(perpAngle) * (offset * 0.15),
+                layer: customLayer, color: dimColor, width: 0.8
+            });
+
+            elements.push({
+                type: 'line', x1: x2 + Math.cos(perpAngle) * (offset * 0.1), y1: y2 + Math.sin(perpAngle) * (offset * 0.1),
+                x2: dimX2 + Math.cos(perpAngle) * (offset * 0.15), y2: dimY2 + Math.sin(perpAngle) * (offset * 0.15),
+                layer: customLayer, color: dimColor, width: 0.8
+            });
+
+            const slashAngle = angle + Math.PI / 4;
+            elements.push({
+                type: 'line', x1: dimX1 - Math.cos(slashAngle) * tickLen, y1: dimY1 - Math.sin(slashAngle) * tickLen,
+                x2: dimX1 + Math.cos(slashAngle) * tickLen, y2: dimY1 + Math.sin(slashAngle) * tickLen,
+                layer: customLayer, color: dimColor, width: 1.8
+            });
+            elements.push({
+                type: 'line', x1: dimX2 - Math.cos(slashAngle) * tickLen, y1: dimY2 - Math.sin(slashAngle) * tickLen,
+                x2: dimX2 + Math.cos(slashAngle) * tickLen, y2: dimY2 + Math.sin(slashAngle) * tickLen,
+                layer: customLayer, color: dimColor, width: 1.8
+            });
+
+            const textX = (dimX1 + dimX2) / 2 + Math.cos(perpAngle) * (offset * 0.12);
+            const textY = (dimY1 + dimY2) / 2 + Math.sin(perpAngle) * (offset * 0.12);
+
+            elements.push({
+                type: 'text', x: textX, y: textY, text: labelText,
+                size: fontSize, align: 'center', layer: customLayer, color: dimColor
+            });
+        }
+
+        // 배수로 사양 연산 갱신
+        function updateDitchDetailsPanel() {
+            const lSpec = DITCH_DATABASE[params.leftDitchSize];
+            const rSpec = DITCH_DATABASE[params.rightDitchSize];
+            const panel = document.getElementById('ditchSummaryPanel');
+
+            let html = "";
+            if (params.leftDitchActive && lSpec) {
+                html += `
+                    <div class="bg-slate-950/80 p-2 rounded border border-slate-850 space-y-1">
+                        <div class="text-indigo-400 font-bold font-mono">좌측 수로관 (${lSpec.label})</div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>내경 (가로x세로):</span><span class="text-slate-200 font-medium">${lSpec.innerW}x${lSpec.innerH} mm</span></div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>두께 (벽체/밑판):</span><span class="text-slate-200 font-medium">${lSpec.wallT}/${lSpec.bottomT} mm</span></div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>외경 가로 총폭:</span><span class="text-indigo-300 font-bold">${lSpec.innerW + lSpec.wallT*2} mm</span></div>
+                    </div>
+                `;
+            } else {
+                html += `<div class="text-slate-500 italic p-1 text-[11px]">좌측 배수로 비활성화</div>`;
+            }
+
+            if (params.rightDitchActive && rSpec) {
+                html += `
+                    <div class="bg-slate-950/80 p-2 rounded border border-slate-850 space-y-1 mt-2">
+                        <div class="text-emerald-400 font-bold font-mono">우측 수로관 (${rSpec.label})</div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>내경 (가로x세로):</span><span class="text-slate-200 font-medium">${rSpec.innerW}x${rSpec.innerH} mm</span></div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>두께 (벽체/밑판):</span><span class="text-slate-200 font-medium">${rSpec.wallT}/${rSpec.bottomT} mm</span></div>
+                        <div class="flex justify-between text-[10px] text-slate-400"><span>외경 가로 총폭:</span><span class="text-emerald-300 font-bold">${rSpec.innerW + rSpec.wallT*2} mm</span></div>
+                    </div>
+                `;
+            } else {
+                html += `<div class="text-slate-500 italic p-1 mt-1 text-[11px]">우측 배수로 비활성화</div>`;
+            }
+
+            panel.innerHTML = html;
+        }
+
+        // 실시간 수량 적산 데이터 가져오기 (엑셀 전송용 구조체)
+        function getQuantitiesArray() {
+            const totalW = params.leftDist + params.rightDist;
+            const asphaltH = params.asphaltThick / 100;
+            const baseH = params.baseThick / 100;
+            const subbaseH = params.subbaseThick / 100;
+            const segmentL = 20.0; // 기본 20m 마디 기준
+
+            const qAsphalt = totalW * asphaltH * segmentL;
+            const qBase = totalW * baseH * segmentL;
+            const qSubbase = totalW * subbaseH * segmentL;
+
+            let graniteLength = 0;
+            let curbConcreteVolume = 0;
+            const lCurbBaseArea = 0.1675; // L형 기초면적
+
+            if (params.leftCurbType === 'l_curb') {
+                graniteLength += segmentL;
+                curbConcreteVolume += lCurbBaseArea * segmentL;
+            } else if (params.leftCurbType === 'r_curb') {
+                graniteLength += segmentL;
+                curbConcreteVolume += 0.04 * segmentL;
+            }
+
+            if (params.rightCurbType === 'l_curb') {
+                graniteLength += segmentL;
+                curbConcreteVolume += lCurbBaseArea * segmentL;
+            } else if (params.rightCurbType === 'r_curb') {
+                graniteLength += segmentL;
+                curbConcreteVolume += 0.04 * segmentL;
+            }
+
+            // 배수로 수량 산출
+            let ditchL = 0;
+            if (params.leftDitchActive) ditchL += segmentL;
+            if (params.rightDitchActive) ditchL += segmentL;
+
+            return [
+                { item: "화강석 경계석 (200x250)", unit: "m", qty: graniteLength },
+                { item: "기초 베드 콘크리트 (C-1)", unit: "m³", qty: curbConcreteVolume },
+                { item: "아스콘 표층 포장공", unit: "m³", qty: qAsphalt },
+                { item: "도로 기층 포장 (아스콘)", unit: "m³", qty: qBase },
+                { item: "도로 보조기층 (크러셔런)", unit: "m³", qty: qSubbase },
+                { item: "U형 수로관 설치공", unit: "m", qty: ditchL }
+            ];
+        }
+
+        // 실시간 토목 적산 수량산출서 렌더링 함수
+        function updateQuantityEstimationPanel() {
+            const panel = document.getElementById('quantityEstimationPanel');
+            const data = getQuantitiesArray();
+
+            let html = `
+                <div class="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 space-y-2 font-mono">
+                    <div class="flex justify-between text-slate-400 border-b border-slate-850 pb-1 text-[10px]">
+                        <span>공종명 (규격)</span>
+                        <span>단위 / 수량</span>
+                    </div>`;
+
+            data.forEach(row => {
+                let colorClass = "text-amber-400";
+                if (row.item.includes("콘크리트")) colorClass = "text-indigo-400";
+                if (row.item.includes("포장")) colorClass = "text-emerald-400";
+                if (row.item.includes("수로관")) colorClass = "text-cyan-400";
+
+                html += `
+                    <div class="flex justify-between">
+                        <span class="text-slate-300">${row.item}</span>
+                        <span class="${colorClass} font-bold">${row.qty.toFixed(row.unit === 'm' ? 1 : 3)} ${row.unit}</span>
+                    </div>`;
+            });
+
+            html += `
+                    <div class="pt-1.5 border-t border-slate-850 flex justify-between text-[10px] text-slate-500">
+                        <span>* 산출 기준 연장:</span>
+                        <span>L = ${stationInterval} m</span>
+                    </div>
+                </div>`;
+            
+            panel.innerHTML = html;
+        }
+
+        // 엑셀 복사 기능 지원
+        function copyQuantitiesToClipboard() {
+            const data = getQuantitiesArray();
+            let tsvText = "공종명(규격)\t단위\t수량(L=20m 기준)\r\n";
+            data.forEach(row => {
+                tsvText += `${row.item}\t${row.unit}\t${row.qty.toFixed(3)}\r\n`;
+            });
+
+            const textarea = document.createElement('textarea');
+            textarea.value = tsvText;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast("엑셀 복사 완료", "적산 테이블이 클립보드에 복사되었습니다. 엑셀에 Ctrl+V로 붙여넣기 하세요.");
+            } catch (err) {
+                showToast("복사 실패", "클립보드 접근 권한을 확인해주세요.");
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // 화면 그리기 루프
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (visibleLayers.GRID) {
+                drawGrid();
+            }
+
+            const cX = canvas.width / 2 + panX;
+            const cY = canvas.height / 2 + panY;
+
+            function toScreenX(cadX) { return cX + cadX * zoomScale; }
+            function toScreenY(cadY) { return cY - cadY * zoomScale; }
+
+            geoElements.forEach(elem => {
+                const currentLayer = elem.layer || "0";
+                if (!visibleLayers[currentLayer]) return;
+
+                ctx.strokeStyle = elem.color || '#fff';
+                ctx.fillStyle = elem.color || '#fff';
+                ctx.lineWidth = elem.width ? elem.width : 1;
+
+                if (elem.type === 'line') {
+                    ctx.beginPath();
+                    if (elem.dash) {
+                        ctx.setLineDash(elem.dash.map(v => v * zoomScale));
+                    } else {
+                        ctx.setLineDash([]);
+                    }
+                    ctx.moveTo(toScreenX(elem.x1), toScreenY(elem.y1));
+                    ctx.lineTo(toScreenX(elem.x2), toScreenY(elem.y2));
+                    ctx.stroke();
+                } 
+                else if (elem.type === 'polyline') {
+                    if (elem.points.length < 2) return;
+                    ctx.beginPath();
+                    ctx.setLineDash([]);
+                    ctx.moveTo(toScreenX(elem.points[0].x), toScreenY(elem.points[0].y));
+                    for (let i = 1; i < elem.points.length; i++) {
+                        ctx.lineTo(toScreenX(elem.points[i].x), toScreenY(elem.points[i].y));
+                    }
+                    if (elem.closed) {
+                        ctx.closePath();
+                    }
+                    ctx.stroke();
+                } 
+                else if (elem.type === 'text') {
+                    ctx.setLineDash([]);
+                    const screenFontSize = Math.max(7, elem.size * zoomScale);
+                    ctx.font = `500 ${screenFontSize}px 'Inter', 'Noto Sans KR'`;
+                    ctx.textAlign = elem.align || 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(elem.text, toScreenX(elem.x), toScreenY(elem.y));
+                }
+                else if (elem.type === 'arrow') {
+                    ctx.setLineDash([]);
+                    const sx1 = toScreenX(elem.x1);
+                    const sy1 = toScreenY(elem.y1);
+                    const sx2 = toScreenX(elem.x2);
+                    const sy2 = toScreenY(elem.y2);
+
+                    ctx.beginPath();
+                    ctx.moveTo(sx1, sy1);
+                    ctx.lineTo(sx2, sy2);
+                    ctx.stroke();
+
+                    const arrowAngle = Math.atan2(sy2 - sy1, sx2 - sx1);
+                    const headLen = Math.max(5, (elem.arrowHeadSize || 100) * zoomScale); 
+
+                    ctx.beginPath();
+                    ctx.moveTo(sx2, sy2);
+                    ctx.lineTo(sx2 - headLen * Math.cos(arrowAngle - Math.PI/6), sy2 - headLen * Math.sin(arrowAngle - Math.PI/6));
+                    ctx.lineTo(sx2 - headLen * Math.cos(arrowAngle + Math.PI/6), sy2 - headLen * Math.sin(arrowAngle + Math.PI/6));
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            });
+        }
+
+        // 모눈 선 레이어 드로잉
+        function drawGrid() {
+            const gridSizeMm = 1000; 
+            const scaledGrid = gridSizeMm * zoomScale;
+            
+            ctx.strokeStyle = '#141824'; 
+            ctx.lineWidth = 0.5;
+
+            const startX = (panX % scaledGrid) - scaledGrid;
+            for (let x = startX; x < canvas.width; x += scaledGrid) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            const startY = (panY % scaledGrid) - scaledGrid;
+            for (let y = startY; y < canvas.height; y += scaledGrid) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // 중심선 강조
+            ctx.strokeStyle = '#22293d';
+            ctx.lineWidth = 1.2;
+            
+            const originX = canvas.width / 2 + panX;
+            ctx.beginPath();
+            ctx.moveTo(originX, 0);
+            ctx.lineTo(originX, canvas.height);
+            ctx.stroke();
+
+            const originY = canvas.height / 2 + panY;
+            ctx.beginPath();
+            ctx.moveTo(0, originY);
+            ctx.lineTo(canvas.width, originY);
+            ctx.stroke();
+        }
+
+        // AutoCAD CIF(Character Interchange Format) 이스케이프 포맷 한글 깨짐 원천 방지 함수
+        function escapeDxfText(text) {
+            return text.split('').map(char => {
+                const code = char.charCodeAt(0);
+                if (code > 127) {
+                    // 유니코드 16진수 대문자 변환 후 AutoCAD가 인식하는 \U+XXXX 포맷 형성
+                    return '\\U+' + code.toString(16).toUpperCase().padStart(4, '0');
+                }
+                return char;
+            }).join('');
+        }
+
+        // R12 규격 기반 통합 병합 횡단면 파일 내보내기 모듈 (정밀 글로벌 축척 정보 내장형)
+        function exportToDXF() {
+            saveActiveStationChanges(); // 내보내기 직전 실시간 수정본 자동 동기화 확보
+            showToast("통합 DXF 내보내기 시작", "지정된 도면 축척(Scale) 변수 및 사선 해칭 구조를 레이어로 공식 주입합니다.");
+
+            // 임시 기하 버퍼링 풀 빌드 (전체 측점 일정한 수직오프셋 간격 25m로 동시 렌더링 도면화)
+            let dxfGeoElements = [];
+            const S = currentScale;
+
+            stations.forEach((st, index) => {
+                const offsetY = -index * 25000; // 측점당 25m씩 아래로 누적 배치하여 캐드에서 겹치지 않게 정렬
+                const formattedName = getStationName(st.distance);
+                const stGeo = generateStationGeometry(st.params, offsetY, formattedName, S);
+                dxfGeoElements = dxfGeoElements.concat(stGeo);
+            });
+
+            // 옵션: 내보내기 시 치수선(DIMENSION, DIM_DETAIL) 레이어 제외
+            const excludeDimensions = document.getElementById('excludeDimensionsOnExport').checked;
+            if (excludeDimensions) {
+                dxfGeoElements = dxfGeoElements.filter(elem => elem.layer !== 'DIMENSION' && elem.layer !== 'DIM_DETAIL');
+            }
+
+            // 1. 도면 실제 기하 한계 영역 (Bounding Extents) 계산
+            let minX = 0, maxX = 0, minY = 0, maxY = 0;
+            if (dxfGeoElements.length > 0) {
+                minX = Infinity; maxX = -Infinity;
+                minY = Infinity; maxY = -Infinity;
+                dxfGeoElements.forEach(elem => {
+                    if (elem.layer === 'DATUM' || elem.layer === 'GRID') return;
+                    if (elem.type === 'line' || elem.type === 'arrow') {
+                        minX = Math.min(minX, elem.x1, elem.x2);
+                        maxX = Math.max(maxX, elem.x1, elem.x2);
+                        minY = Math.min(minY, elem.y1, elem.y2);
+                        maxY = Math.max(maxY, elem.y1, elem.y2);
+                    } else if (elem.type === 'polyline') {
+                        elem.points.forEach(pt => {
+                            minX = Math.min(minX, pt.x);
+                            maxX = Math.max(maxX, pt.x);
+                            minY = Math.min(minY, pt.y);
+                            maxY = Math.max(maxY, pt.y);
+                        });
+                    }
+                });
+                if (minX === Infinity) { 
+                    minX = -10000; maxX = 10000; minY = -5000; maxY = 5000; 
+                }
+            }
+
+            let dxf = "";
+
+            function write(code, value) {
+                return `${code}\n${value}\n`;
+            }
+
+            // SECTION 1: HEADER (R12 AC1009 최적 표준 유지 + 변수 축척 시스템 매핑)
+            dxf += write(0, "SECTION");
+            dxf += write(2, "HEADER");
+            dxf += write(9, "$ACADVER");
+            dxf += write(1, "AC1009"); // AutoCAD R12 최적 호환성 적용
+            dxf += write(9, "$DWGCODEPAGE");
+            dxf += write(3, "ANSI_949"); // 한국어 코드페이지 기본 할당
+
+            // 오토캐드 공식 축척 변수(DIMSCALE, LTSCALE, TEXTSIZE) 세팅 정의
+            dxf += write(9, "$LTSCALE");
+            dxf += write(40, S.toFixed(3)); 
+            dxf += write(9, "$DIMSCALE");
+            dxf += write(40, S.toFixed(3)); 
+            dxf += write(9, "$TEXTSIZE");
+            dxf += write(40, (2.5 * S).toFixed(3)); 
+
+            // 초기 뷰 가시성 조절용 한계영역(EXTENTS) 자동 할당
+            dxf += write(9, "$EXTMIN");
+            dxf += write(10, minX.toFixed(3));
+            dxf += write(20, minY.toFixed(3));
+            dxf += write(30, "0.0");
+            dxf += write(9, "$EXTMAX");
+            dxf += write(10, maxX.toFixed(3));
+            dxf += write(20, maxY.toFixed(3));
+            dxf += write(30, "0.0");
+
+            dxf += write(0, "ENDSEC");
+
+            // SECTION 2: TABLES (레이어와 표준 LTYPE 정의)
+            dxf += write(0, "SECTION");
+            dxf += write(2, "TABLES");
+            
+            // 2-1. 선종류(LTYPE) 테이블 추가 선언 (일점쇄선 CENTER 타입 내장)
+            dxf += write(0, "TABLE");
+            dxf += write(2, "LTYPE");
+            dxf += write(70, 2); 
+
+            // CONTINUOUS 선종류 정의
+            dxf += write(0, "LTYPE");
+            dxf += write(2, "CONTINUOUS");
+            dxf += write(70, 64);
+            dxf += write(3, "Solid line");
+            dxf += write(72, 65);
+            dxf += write(73, 0);
+            dxf += write(40, "0.0");
+
+            // CENTER 선종류 정의 (일점쇄선 표준 구조 설계)
+            dxf += write(0, "LTYPE");
+            dxf += write(2, "CENTER");
+            dxf += write(70, 64);
+            dxf += write(3, "Center ____ _ ____ _ ____");
+            dxf += write(72, 65);
+            dxf += write(73, 4);
+            dxf += write(40, "2.0");
+            dxf += write(49, "1.25");
+            dxf += write(49, "-0.25");
+            dxf += write(49, "0.25");
+            dxf += write(49, "-0.25");
+
+            dxf += write(0, "ENDTAB");
+
+            // 2-2. 도면층(LAYER) 선언 및 기본 선종류 일괄 바인딩
+            dxf += write(0, "TABLE");
+            dxf += write(2, "LAYER");
+            dxf += write(70, 12); 
+
+            const layerTable = [
+                { name: "ROAD", color: 3, ltype: "CONTINUOUS" },      
+                { name: "CURB", color: 40, ltype: "CONTINUOUS" },     
+                { name: "SIDEWALK", color: 2, ltype: "CONTINUOUS" },  
+                { name: "PAVEMENT", color: 34, ltype: "CONTINUOUS" }, 
+                { name: "UDITCH", color: 4, ltype: "CONTINUOUS" },    
+                { name: "GROUND", color: 32, ltype: "CONTINUOUS" },    
+                { name: "DIMENSION", color: 1, ltype: "CONTINUOUS" }, 
+                { name: "DIM_DETAIL", color: 1, ltype: "CONTINUOUS" }, 
+                { name: "HATCH", color: 8, ltype: "CONTINUOUS" },      
+                { name: "CENTER", color: 6, ltype: "CENTER" },    
+                { name: "DATUM", color: 9, ltype: "CONTINUOUS" },     
+                { name: "0", color: 7, ltype: "CONTINUOUS" }          
+            ];
+
+            layerTable.forEach(ly => {
+                dxf += write(0, "LAYER");
+                dxf += write(2, ly.name);
+                dxf += write(70, 64);            
+                dxf += write(62, ly.color);      
+                dxf += write(6, ly.ltype);   
+            });
+
+            dxf += write(0, "ENDTAB");
+            dxf += write(0, "ENDSEC");
+
+            // SECTION 3: ENTITIES (병합 기하 요소 저장)
+            dxf += write(0, "SECTION");
+            dxf += write(2, "ENTITIES");
+
+            dxfGeoElements.forEach(elem => {
+                const layer = elem.layer || "0";
+
+                if (elem.type === 'line' || elem.type === 'arrow') {
+                    dxf += write(0, "LINE");
+                    dxf += write(8, layer);
+                    dxf += write(10, elem.x1.toFixed(3));
+                    dxf += write(20, elem.y1.toFixed(3));
+                    dxf += write(30, "0.0");
+                    dxf += write(11, elem.x2.toFixed(3));
+                    dxf += write(21, elem.y2.toFixed(3));
+                    dxf += write(31, "0.0");
+
+                    if (elem.type === 'arrow') {
+                        const arrowAngle = Math.atan2(elem.y2 - elem.y1, elem.x2 - elem.x1);
+                        const headLen = elem.arrowHeadSize || (1.6 * S);
+
+                        const wing1X = elem.x2 - headLen * Math.cos(arrowAngle - Math.PI / 6);
+                        const wing1Y = elem.y2 - headLen * Math.sin(arrowAngle - Math.PI / 6);
+                        dxf += write(0, "LINE");
+                        dxf += write(8, layer);
+                        dxf += write(10, elem.x2.toFixed(3));
+                        dxf += write(20, elem.y2.toFixed(3));
+                        dxf += write(30, "0.0");
+                        dxf += write(11, wing1X.toFixed(3));
+                        dxf += write(21, wing1Y.toFixed(3));
+                        dxf += write(31, "0.0");
+
+                        const wing2X = elem.x2 - headLen * Math.cos(arrowAngle + Math.PI / 6);
+                        const wing2Y = elem.y2 - headLen * Math.sin(arrowAngle + Math.PI / 6);
+                        dxf += write(0, "LINE");
+                        dxf += write(8, layer);
+                        dxf += write(10, elem.x2.toFixed(3));
+                        dxf += write(20, elem.y2.toFixed(3));
+                        dxf += write(30, "0.0");
+                        dxf += write(11, wing2X.toFixed(3));
+                        dxf += write(21, wing2Y.toFixed(3));
+                        dxf += write(31, "0.0");
+                    }
+                } 
+                else if (elem.type === 'polyline') {
+                    if (elem.points.length < 2) return;
+                    
+                    dxf += write(0, "POLYLINE");
+                    dxf += write(8, layer);
+                    dxf += write(66, "1"); 
+                    dxf += write(70, elem.closed ? "1" : "0");
+
+                    elem.points.forEach(pt => {
+                        dxf += write(0, "VERTEX");
+                        dxf += write(8, layer);
+                        dxf += write(10, pt.x.toFixed(3));
+                        dxf += write(20, pt.y.toFixed(3));
+                        dxf += write(30, "0.0");
+                    });
+
+                    dxf += write(0, "SEQEND");
+                    dxf += write(8, layer);
+                } 
+                else if (elem.type === 'text') {
+                    dxf += write(0, "TEXT");
+                    dxf += write(8, layer);
+                    dxf += write(10, elem.x.toFixed(3));
+                    dxf += write(20, elem.y.toFixed(3));
+                    dxf += write(30, "0.0");
+                    dxf += write(40, elem.size.toFixed(1)); 
+                    // 중요: 한글 텍스트에 CIF 유니코드 escape 처리 적용하여 AutoCAD 한글 깨짐 원천 방지
+                    dxf += write(1, escapeDxfText(elem.text));             
+                    dxf += write(50, "0.0");                
+
+                    if (elem.align === 'center') {
+                        dxf += write(72, 1); 
+                        dxf += write(11, elem.x.toFixed(3));
+                        dxf += write(21, elem.y.toFixed(3));
+                        dxf += write(31, "0.0");
+                    } else if (elem.align === 'right') {
+                        dxf += write(72, 2); 
+                        dxf += write(11, elem.x.toFixed(3));
+                        dxf += write(21, elem.y.toFixed(3));
+                        dxf += write(31, "0.0");
+                    }
+                }
+            });
+
+            dxf += write(0, "ENDSEC");
+            dxf += write(0, "EOF");
+
+            // 다운로드 Blob 생성
+            const blob = new Blob([dxf], { type: 'application/dxf;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+            
+            a.href = url;
+            a.download = `ROAD_CROSS_SECTIONS_MERGED_S1-${S}_${dateStr}.dxf`;
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("통합 DXF 내보내기 완료", `축척 1:${S} 규격 및 L형 해칭 사선선들이 완벽하게 이식된 도면 파일이 저장되었습니다.`, 4000);
+            }, 100);
+        }
+
+        // --- 화면 우측 상단 토스트 알림 컴포넌트 제어 ---
+        let toastTimer;
+        function showToast(title, body, duration = 3000) {
+            const toast = document.getElementById('toastMessage');
+            document.getElementById('toastTitle').innerText = title;
+            document.getElementById('toastBody').innerText = body;
+            
+            toast.classList.remove('translate-x-[450px]', 'opacity-0');
+            toast.classList.add('translate-x-0', 'opacity-100');
+
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('translate-x-[450px]', 'opacity-0');
+                toast.classList.remove('translate-x-0', 'opacity-100');
+            }, duration);
+        }
+    </script>
+</body>
+</html>
