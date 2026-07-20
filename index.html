@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAD 횡단면도 멀티 측점 설계기 및 DXF 내보내기 프로그램 v5.0</title>
+    <title>CAD 횡단면도 멀티 측점 설계기 및 DXF 내보내기 프로그램 v5.6</title>
     <!-- Tailwind CSS 로드 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts Inter & Noto Sans KR 로드 -->
@@ -48,16 +48,12 @@
     <!-- 상단 헤더 바 -->
     <header class="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between shadow-xl shrink-0 z-30">
         <div class="flex items-center space-x-3.5">
-            <!-- 모바일용 좌측 패널 토글 버튼 -->
-            <button onclick="toggleLeftPanel()" class="lg:hidden bg-slate-800 p-2 rounded-lg text-slate-400 hover:text-white border border-slate-700">
-                <i class="fa-solid fa-bars"></i>
-            </button>
             <div class="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/20">
                 <i class="fa-solid fa-drafting-compass text-xl"></i>
             </div>
             <div>
                 <h1 class="text-base md:text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-                    CAD 횡단면도 멀티 측점 제너레이터 <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-1.5 py-0.5 rounded border border-indigo-500/30 hidden sm:inline">ENGINE v5.0</span>
+                    CAD 횡단면도 멀티 측점 제너레이터 <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-1.5 py-0.5 rounded border border-indigo-500/30 hidden sm:inline">ENGINE v5.6</span>
                 </h1>
                 <p class="text-[10px] md:text-xs text-slate-400">계획고(FH) 연동형 원지반 종단면 사면 매핑 및 AutoCAD 무결성 한글 DXF 파일 내보내기</p>
             </div>
@@ -78,13 +74,9 @@
             <button onclick="resetCamera()" class="px-3 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600">
                 <i class="fa-solid fa-arrows-to-dot text-indigo-400"></i> <span class="hidden sm:inline">화면 맞춤 (R)</span>
             </button>
-            <button onclick="exportProject()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600" title="현재 프로젝트를 JSON 파일로 저장">
-                <i class="fa-solid fa-download text-emerald-400"></i> <span class="hidden lg:inline">프로젝트 저장</span>
+            <button onclick="openModal('modalProject')" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600" title="프로젝트 저장/불러오기">
+                <i class="fa-solid fa-folder-open text-emerald-400"></i> <span class="hidden lg:inline">프로젝트</span>
             </button>
-            <label class="px-2.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-slate-600 cursor-pointer" title="JSON 파일로부터 프로젝트 불러오기">
-                <i class="fa-solid fa-upload text-emerald-400"></i> <span class="hidden lg:inline">프로젝트 불러오기</span>
-                <input type="file" accept=".json" onchange="importProject(event)" class="hidden">
-            </label>
             <label class="hidden sm:flex items-center gap-1.5 px-2 text-[11px] text-slate-400 cursor-pointer select-none">
                 <input type="checkbox" id="excludeDimensionsOnExport" class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
                 <span>내보내기 시 치수선 제외</span>
@@ -95,19 +87,57 @@
         </div>
     </header>
 
-    <!-- 메인 대시보드 구조 (양측 메뉴 고정 배치 3단 그리드 시스템) -->
+    <!-- 상단 설정 메뉴 바 (클릭 시 팝업 모달로 표시) -->
+    <nav class="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto shrink-0 z-20">
+        <button onclick="openModal('modalDrawingScale')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-indigo-800">
+            <i class="fa-solid fa-ruler-combined text-indigo-400"></i> 도면기준
+        </button>
+        <button onclick="openModal('modalEarthwork')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-emerald-800">
+            <i class="fa-solid fa-mound text-emerald-400"></i> 토공기하
+        </button>
+        <button onclick="openModal('modalAlignment')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-cyan-950 hover:text-cyan-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-cyan-800">
+            <i class="fa-solid fa-route text-cyan-400"></i> 평면/종단선형
+        </button>
+        <button onclick="openModal('modalStationManager')" class="shrink-0 px-3 py-1.5 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border border-indigo-800">
+            <i class="fa-solid fa-map-pin"></i> 측점관리
+        </button>
+        <button onclick="openModal('modalLaneWidth')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-indigo-800">
+            <i class="fa-solid fa-road text-indigo-400"></i> 차도폭/구배
+        </button>
+        <button onclick="openModal('modalCurbDitch')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-orange-950 hover:text-orange-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-orange-800">
+            <i class="fa-solid fa-person-walking text-orange-400"></i> 경계석/배수로
+        </button>
+        <button onclick="openModal('modalPavement')" class="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-amber-950 hover:text-amber-300 text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border border-slate-750 hover:border-amber-800">
+            <i class="fa-solid fa-layer-group text-amber-400"></i> 포장단면
+        </button>
+    </nav>
+
+    <!-- 메인 대시보드 구조 (2단 그리드: 캔버스 + 우측 수량산출 패널, 좌측 메뉴는 상단 바에서 팝업으로 표시) -->
     <main class="flex-1 flex overflow-hidden relative">
         
-        <!-- 좌측 제어 메뉴 패널 -->
-        <aside id="leftSidebar" class="sidebar-transition fixed lg:relative top-0 bottom-0 left-0 w-80 lg:w-96 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-2xl z-25 h-full transform -translate-x-full lg:translate-x-0">
-            
-            <!-- 도면 표준 스케일(Scale) 및 프리셋 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
-                <button type="button" onclick="toggleAccordion(this)" class="w-full text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between cursor-pointer">
-                    <span>도면 설계 기준</span>
-                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
+        <div id="modalProject" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-folder-open text-emerald-400"></i> 프로젝트 저장/불러오기</h3>
+                    <button type="button" onclick="closeModal('modalProject')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <button onclick="exportProject()" class="w-full bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-200 font-bold py-2.5 rounded-lg border border-emerald-900 transition-all flex items-center justify-center gap-2 text-xs">
+                    <i class="fa-solid fa-download"></i> 현재 프로젝트를 JSON 파일로 저장
                 </button>
-                <div class="accordion-content hidden space-y-3 pt-3">
+                <label class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer">
+                    <i class="fa-solid fa-upload text-indigo-400"></i> JSON 파일로부터 프로젝트 불러오기
+                    <input type="file" accept=".json" onchange="importProject(event)" class="hidden">
+                </label>
+                <p class="text-[9px] text-slate-500 leading-relaxed">측점, 축척, 평면 IP 좌표 데이터가 모두 포함되어 저장/복원됩니다. 불러오기 시 현재 작업 중인 내용은 대체되니 필요하면 먼저 저장해주세요.</p>
+            </div>
+        </div>
+
+        <div id="modalDrawingScale" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-ruler-combined text-indigo-400"></i> 도면 설계 기준</h3>
+                    <button type="button" onclick="closeModal('modalDrawingScale')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-[10px] text-slate-400 mb-1">축척 (Scale)</label>
@@ -131,16 +161,15 @@
                         </select>
                     </div>
                 </div>
-                </div>
             </div>
+        </div>
 
-            <!-- 계획고(FH) 및 원지반고 수치 설정 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
-                <button type="button" onclick="toggleAccordion(this)" class="w-full text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between cursor-pointer">
-                    <span>토공 기하 매핑 기준 (수동/연계 가능)</span>
-                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
-                </button>
-                <div class="accordion-content hidden space-y-3 pt-3">
+        <div id="modalEarthwork" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-mound text-emerald-400"></i> 토공 기하 매핑 기준</h3>
+                    <button type="button" onclick="closeModal('modalEarthwork')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
                 <div class="grid grid-cols-3 gap-2">
                     <div>
                         <label class="block text-[10px] text-slate-400 mb-1">C.L 계획고(FH)</label>
@@ -164,51 +193,93 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">사면 경사비 (1:N, 좌/우 각각 성토·절토)</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 space-y-2">
+                            <span class="text-[10px] font-bold text-indigo-300">좌측</span>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">성토 1:N</label>
+                                    <input type="number" id="leftFillSlope" value="1.5" step="0.1" min="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">절토 1:N</label>
+                                    <input type="number" id="leftCutSlope" value="1.2" step="0.1" min="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 space-y-2">
+                            <span class="text-[10px] font-bold text-emerald-300">우측</span>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">성토 1:N</label>
+                                    <input type="number" id="rightFillSlope" value="1.5" step="0.1" min="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">절토 1:N</label>
+                                    <input type="number" id="rightCutSlope" value="1.2" step="0.1" min="0.1" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 종단선형(IP) 및 편경사 설정 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
-                <button type="button" onclick="toggleAccordion(this)" class="w-full text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center justify-between cursor-pointer">
-                    <span>종단선형(IP) 및 편경사 설정</span>
-                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
-                </button>
-                <div class="accordion-content hidden space-y-3 pt-3">
+        <div id="modalAlignment" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-route text-cyan-400"></i> 평면/종단선형(IP) 및 편구배 설정</h3>
+                    <button type="button" onclick="closeModal('modalAlignment')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
 
-                    <!-- 종단 IP 입력 -->
+                    <!-- 평면 IP 좌표 데이터 입력 -->
                     <div class="space-y-1.5">
-                        <label class="block text-[10px] text-slate-400">종단 IP 붙여넣기 (측점, 계획고, 곡선장L(m) · 탭 구분 · L=0이면 절선)</label>
+                        <label class="block text-[10px] text-slate-400">좌표 데이터 입력 (IP명, X, Y, R, A1, A2, R2 · 탭 구분)</label>
+                        <textarea id="horizontalIPInput" rows="3" placeholder="예)
+IP1	205431.120	452110.340	0	0	0	0
+IP2	205620.450	452340.880	300	80	80	0
+IP3	205890.200	452510.600	0	0	0	0" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500 placeholder-slate-600"></textarea>
+                        <button onclick="saveHorizontalIPData()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-slate-100 font-bold py-1.5 rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-1 text-[11px]">
+                            <i class="fa-solid fa-floppy-disk"></i> 좌표 데이터 저장
+                        </button>
+                        <p class="text-[9px] text-amber-500/80 leading-relaxed">※ 현재는 IP 좌표/클로소이드(A1,A2)/원곡선반경(R,R2) 데이터를 저장·프로젝트에 포함하는 것까지만 지원합니다. 이 데이터로부터 평면선형을 계산해 측점 좌표·편구배를 자동 산출하는 기능은 이번 업데이트 범위 밖입니다.</p>
+                    </div>
+
+                    <!-- 종구배(종단 IP) 입력 -->
+                    <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
+                        <label class="block text-[10px] text-slate-400">종구배 입력 (측점, 레벨, 완화곡선길이, 구배% · 탭 구분 · 레벨 비우면 이전 IP+구배로 자동계산)</label>
                         <textarea id="verticalIPInput" rows="3" placeholder="예)
-0+000.0000	10.00	0
-0+250.0000	11.50	40
-0+520.0000	10.20	0" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500 placeholder-slate-600"></textarea>
+0+000.0000	10.00	0	0.60
+0+250.0000	11.50	40	-0.48
+0+520.0000	10.20	0	0.00" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500 placeholder-slate-600"></textarea>
                         <button onclick="applyVerticalProfile()" class="w-full bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 hover:text-cyan-200 font-bold py-1.5 rounded-lg border border-cyan-900 transition-all flex items-center justify-center gap-1 text-[11px]">
-                            <i class="fa-solid fa-chart-line"></i> 종단(IP) 계획고 일괄 적용
+                            <i class="fa-solid fa-chart-line"></i> 종구배(IP) 계획고 일괄 적용
                         </button>
                     </div>
 
-                    <!-- 편경사 제어점 입력 -->
+                    <!-- 편구배 입력 -->
                     <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
-                        <label class="block text-[10px] text-slate-400">편경사 제어점 붙여넣기 (측점, 좌측구배%, 우측구배% · 탭 구분)</label>
+                        <label class="block text-[10px] text-slate-400">편구배 입력 (측점, 좌측%, 우측% · 탭 구분)</label>
                         <textarea id="superelevationInput" rows="3" placeholder="예)
 0+000.0000	2.0	-2.0
 0+250.0000	-5.0	-5.0
 0+520.0000	2.0	-2.0" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500 placeholder-slate-600"></textarea>
                         <button onclick="applySuperelevationProfile()" class="w-full bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 hover:text-cyan-200 font-bold py-1.5 rounded-lg border border-cyan-900 transition-all flex items-center justify-center gap-1 text-[11px]">
-                            <i class="fa-solid fa-rotate"></i> 편경사 일괄 적용
+                            <i class="fa-solid fa-rotate"></i> 편구배 일괄 적용
                         </button>
                     </div>
-
-                </div>
             </div>
+        </div>
 
-            <!-- 측점 등록 및 관리 모듈 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-indigo-900/40 space-y-3">
-                <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>측점 관리 (Station Manager)</span>
-                    <span class="text-[9px] text-slate-500" id="stationCountText">등록된 측점: 3개</span>
-                </span>
-
+        <div id="modalStationManager" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-map-pin text-indigo-400"></i> 측점 관리 <span class="text-[9px] text-slate-500 font-normal ml-1" id="stationCountText">등록된 측점: 3개</span></h3>
+                    <button type="button" onclick="closeModal('modalStationManager')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
                 <!-- 명명 형식 및 간격 설정 유닛 -->
                 <div class="grid grid-cols-2 gap-2 bg-slate-900/40 p-2 rounded-lg border border-slate-800/80">
                     <div>
@@ -271,14 +342,15 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 섹션 1: 차도 단면 매개변수 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60">
-                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
-                    <span class="flex items-center gap-2"><i class="fa-solid fa-road text-indigo-400"></i> 차도폭 및 구배 (센터 기준)</span>
-                    <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
-                </button>
-                <div class="accordion-content hidden space-y-3 pt-3">
+        <div id="modalLaneWidth" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg xl:max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-road text-indigo-400"></i> 차도폭 및 구배 (센터 기준)</h3>
+                    <button type="button" onclick="closeModal('modalLaneWidth')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <div class="xl:grid xl:grid-cols-2 xl:gap-3 space-y-3 xl:space-y-0">
                 <!-- 좌측 차로 -->
                 <div class="space-y-2 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
                     <div class="text-[11px] font-bold text-indigo-400 flex items-center gap-1.5">
@@ -296,6 +368,22 @@
                             <label class="block text-[10px] text-slate-400 mb-1">구배 (S)</label>
                             <div class="relative">
                                 <input type="number" id="leftSlope" value="-2.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">노견 폭</label>
+                            <div class="relative">
+                                <input type="number" id="leftShoulderWidth" value="0" step="0.1" min="0" max="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">노견 구배</label>
+                            <div class="relative">
+                                <input type="number" id="leftShoulderSlope" value="4.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
                                 <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
                             </div>
                         </div>
@@ -319,6 +407,22 @@
                             <label class="block text-[10px] text-slate-400 mb-1">구배 (S)</label>
                             <div class="relative">
                                 <input type="number" id="rightSlope" value="-2.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">노견 폭</label>
+                            <div class="relative">
+                                <input type="number" id="rightShoulderWidth" value="0" step="0.1" min="0" max="5" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
+                                <span class="absolute right-2 top-1 text-[10px] text-slate-500">m</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-1">노견 구배</label>
+                            <div class="relative">
+                                <input type="number" id="rightShoulderSlope" value="4.0" step="0.1" min="-15" max="15" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 pr-7 text-xs focus:outline-none focus:border-indigo-500 text-slate-200 font-bold">
                                 <span class="absolute right-2 top-1 text-[10px] text-slate-500">%</span>
                             </div>
                         </div>
@@ -348,26 +452,14 @@
                 </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 경계석/인도부 + 배수로 모달 오픈 버튼 -->
-            <button type="button" onclick="openModal('modalCurbDitch')" class="w-full bg-slate-950/50 hover:bg-slate-900 p-3 rounded-xl border border-slate-800/60 flex items-center justify-between transition-all group">
-                <span class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fa-solid fa-person-walking text-orange-400"></i> 경계석/인도부 및 배수로 설계
-                </span>
-                <i class="fa-solid fa-arrow-up-right-from-square text-slate-500 group-hover:text-orange-400 text-[11px]"></i>
-            </button>
-
-
-            <!-- 섹션 4: 포장 공종 구조 설정 -->
-            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800/60 pb-6">
-                <button type="button" onclick="toggleAccordion(this)" class="w-full text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between cursor-pointer">
-                    <span class="flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-400"></i> 도로 포장 단면 (CM)</span>
-                    <span class="flex items-center gap-2">
-                        <span class="text-[10px] text-amber-400 font-bold" id="totalPavementThick">35 cm</span>
-                        <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
-                    </span>
-                </button>
-                <div class="accordion-content hidden space-y-3 pt-3">
+        <div id="modalPavement" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-400"></i> 도로 포장 단면 (CM) <span class="text-[10px] text-amber-400 font-bold ml-1" id="totalPavementThick">35 cm</span></h3>
+                    <button type="button" onclick="closeModal('modalPavement')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
                 <div class="space-y-2 text-xs">
                     <div class="space-y-1">
                         <div class="flex justify-between text-[11px]">
@@ -413,13 +505,12 @@
                         <i class="fa-solid fa-check"></i> 설정 적용
                     </button>
                 </div>
-                </div>
             </div>
+        </div>
 
-        </aside>
-        <!-- 모달: 경계석/인도부 및 배수로 설계 -->
+
         <div id="modalCurbDitch" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg xl:max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                     <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-person-walking text-orange-400"></i> 경계석/인도부 및 배수로 설계</h3>
                     <button type="button" onclick="closeModal('modalCurbDitch')" class="text-slate-500 hover:text-slate-200 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -454,6 +545,7 @@
                     <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
                 </button>
                 <div class="accordion-content space-y-3 pt-3">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-3 space-y-3 xl:space-y-0">
                 <!-- 좌측 경계석 및 인도 -->
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
                     <div class="text-[11px] font-bold text-indigo-400 flex items-center gap-1.5"><i class="fa-solid fa-arrow-left"></i> 좌측 보도 영역</div>
@@ -464,8 +556,23 @@
                                 <option value="none" selected>설치 안 함</option>
                                 <option value="l_curb">보차도경계석(L형)</option>
                                 <option value="r_curb">도로경계석(일반)</option>
+                                <option value="custom">사용자 지정</option>
                             </select>
                             <p id="leftCurbSpecLabel" class="text-[9px] text-slate-500 mt-0.5"></p>
+                            <div id="leftCurbCustomFields" class="hidden grid grid-cols-3 gap-1.5 pt-1.5">
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">폭(mm)</label>
+                                    <input type="number" id="leftCurbCustomWidth" value="150" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">높이(mm)</label>
+                                    <input type="number" id="leftCurbCustomHeight" value="200" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">매립(mm)</label>
+                                    <input type="number" id="leftCurbCustomEmbed" value="50" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-indigo-500">
+                                </div>
+                            </div>
                         </div>
                         <div class="flex items-end pb-1">
                             <label class="inline-flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
@@ -502,8 +609,23 @@
                                 <option value="none" selected>설치 안 함</option>
                                 <option value="l_curb">보차도경계석(L형)</option>
                                 <option value="r_curb">도로경계석(일반)</option>
+                                <option value="custom">사용자 지정</option>
                             </select>
                             <p id="rightCurbSpecLabel" class="text-[9px] text-slate-500 mt-0.5"></p>
+                            <div id="rightCurbCustomFields" class="hidden grid grid-cols-3 gap-1.5 pt-1.5">
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">폭(mm)</label>
+                                    <input type="number" id="rightCurbCustomWidth" value="150" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">높이(mm)</label>
+                                    <input type="number" id="rightCurbCustomHeight" value="200" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] text-slate-500">매립(mm)</label>
+                                    <input type="number" id="rightCurbCustomEmbed" value="50" step="10" class="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 px-1.5 text-[11px] text-slate-200 font-bold focus:outline-none focus:border-emerald-500">
+                                </div>
+                            </div>
                         </div>
                         <div class="flex items-end pb-1">
                             <label class="inline-flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
@@ -530,6 +652,7 @@
                     </div>
                 </div>
                 </div>
+                </div>
             </div>
 
             <!-- 섹션 3: 배수로 규격 설정 -->
@@ -539,6 +662,7 @@
                     <i class="fa-solid fa-chevron-down accordion-icon text-slate-500 transition-transform text-[10px]"></i>
                 </button>
                 <div class="accordion-content space-y-3 pt-3">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-3 space-y-3 xl:space-y-0">
                 <!-- 좌측 배수로 -->
                 <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 space-y-2">
                     <div class="flex items-center justify-between">
@@ -627,6 +751,7 @@
                     </div>
                 </div>
                 </div>
+                </div>
             </div>
             </div>
         </div>
@@ -671,7 +796,7 @@
         </section>
 
         <!-- 우측 레이어 및 요약 패널 -->
-        <aside id="rightSidebar" class="sidebar-transition fixed lg:relative top-0 bottom-0 right-0 w-80 bg-slate-900 border-l border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-2xl z-25 h-full transform translate-x-full lg:translate-x-0">
+        <aside id="rightSidebar" class="sidebar-transition fixed lg:relative top-0 bottom-0 right-0 w-80 xl:w-96 bg-slate-900 border-l border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-2xl z-25 h-full transform translate-x-full lg:translate-x-0">
             
             <!-- 레이어 조작기 (CAD Layer Visibility Manager) -->
             <div class="space-y-3 bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/60">
@@ -846,6 +971,8 @@
             
             leftCurbType: "none",  // 기본 '설치 안 함' 적용
             rightCurbType: "none", // 기본 '설치 안 함' 적용
+            leftCurbCustom: { width: 150, height: 200, embed: 50 },
+            rightCurbCustom: { width: 150, height: 200, embed: 50 },
             
             leftSidewalkActive: false,  // 기본 체크 해제 적용
             leftSidewalkWidth: 1.5, // m
@@ -854,6 +981,16 @@
             rightSidewalkActive: false, // 기본 체크 해제 적용
             rightSidewalkWidth: 1.5, // m
             rightSidewalkSlope: -2.0, // %
+
+            leftShoulderWidth: 0,    // m (노견부 폭, 0이면 미설치)
+            leftShoulderSlope: 4.0,  // %
+            rightShoulderWidth: 0,   // m
+            rightShoulderSlope: 4.0, // %
+
+            leftFillSlope: 1.5,  // 좌측 성토사면 경사비 (1:N)
+            leftCutSlope: 1.2,   // 좌측 절토사면 경사비 (1:N)
+            rightFillSlope: 1.5, // 우측 성토사면 경사비 (1:N)
+            rightCutSlope: 1.2,  // 우측 절토사면 경사비 (1:N)
 
             leftDitchActive: true,
             leftDitchSize: "400",       // 기본 400 배수로
@@ -882,6 +1019,7 @@
         let activeStationId = "st_1";
         let viewAllStationsMode = false; // 모든 측점을 동시에 도면에 연속 렌더링하는 토글 변수
         let currentScale = 100;          // 글로벌 단일 축척 상태 제어 변수 (1:100 기본)
+        let horizontalIPs = [];          // 평면 IP 좌표 데이터 (IP명, X, Y, R, A1, A2, R2) - 저장/불러오기용, 선형 계산 미적용
 
         // 현재 수동 튜닝용 active params 매핑
         let params = JSON.parse(JSON.stringify(stations[0].params));
@@ -973,12 +1111,19 @@
         const CURB_SPEC_LABELS = {
             none: "",
             l_curb: "보차도경계석 200x250x1000 화강석 · 기초두께 220 · 전체폭 750",
-            r_curb: "도로경계석 150x150x1000 · 상단 지지폭 250"
+            r_curb: "도로경계석 150x150x1000 · 상단 지지폭 250",
+            custom: "사용자 지정 규격 (아래 폭/높이/매립 입력)"
         };
         function updateCurbSpecLabel(side) {
             const selectEl = document.getElementById(side === 'left' ? 'leftCurbType' : 'rightCurbType');
             const labelEl = document.getElementById(side === 'left' ? 'leftCurbSpecLabel' : 'rightCurbSpecLabel');
+            const fieldsEl = document.getElementById(side === 'left' ? 'leftCurbCustomFields' : 'rightCurbCustomFields');
             labelEl.innerText = CURB_SPEC_LABELS[selectEl.value] || "";
+            if (selectEl.value === 'custom') {
+                fieldsEl.classList.remove('hidden');
+            } else {
+                fieldsEl.classList.add('hidden');
+            }
         }
 
         // 차도폭/구배 설정 적용 대상 라디오 변경 시 측점 선택 목록 표시 제어
@@ -1057,7 +1202,8 @@
                 savedAt: new Date().toISOString(),
                 currentScale: currentScale,
                 activeStationId: activeStationId,
-                stations: stations
+                stations: stations,
+                horizontalIPs: horizontalIPs
             };
             const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
@@ -1072,7 +1218,7 @@
             showToast("프로젝트 저장 완료", "현재 측점 및 설정이 JSON 파일로 저장되었습니다.");
         }
 
-        // JSON 파일로부터 프로젝트(측점, 축척, 활성 파라미터) 불러오기
+        // JSON 파일로부터 프로젝트(측점, 축척, 활성 파라미터, 평면 IP 좌표) 불러오기
         function importProject(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1086,6 +1232,7 @@
                     }
                     stations = data.stations;
                     currentScale = data.currentScale || 100;
+                    horizontalIPs = Array.isArray(data.horizontalIPs) ? data.horizontalIPs : [];
                     activeStationId = data.activeStationId && stations.find(st => st.id === data.activeStationId)
                         ? data.activeStationId
                         : stations[0].id;
@@ -1134,7 +1281,7 @@
 
             // 현재 활성 측점의 경계석/인도부/배수로 관련 값만 추출
             const fieldsToCopy = [
-                'leftCurbType', 'rightCurbType',
+                'leftCurbType', 'rightCurbType', 'leftCurbCustom', 'rightCurbCustom',
                 'leftSidewalkActive', 'leftSidewalkWidth', 'leftSidewalkSlope',
                 'rightSidewalkActive', 'rightSidewalkWidth', 'rightSidewalkSlope',
                 'leftDitchActive', 'leftDitchSize', 'leftDitchCustom',
@@ -1172,20 +1319,6 @@
             if (icon) icon.classList.toggle('rotate-180');
         }
 
-        function toggleLeftPanel() {
-            const sidebar = document.getElementById('leftSidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            if (sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.remove('-translate-x-full');
-                overlay.classList.remove('hidden');
-            } else {
-                sidebar.classList.add('-translate-x-full');
-                if (document.getElementById('rightSidebar').classList.contains('translate-x-full')) {
-                    overlay.classList.add('hidden');
-                }
-            }
-        }
-
         function toggleRightPanel() {
             const sidebar = document.getElementById('rightSidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1194,14 +1327,11 @@
                 overlay.classList.remove('hidden');
             } else {
                 sidebar.classList.add('translate-x-full');
-                if (document.getElementById('leftSidebar').classList.contains('-translate-x-full')) {
-                    overlay.classList.add('hidden');
-                }
+                overlay.classList.add('hidden');
             }
         }
 
         function closeAllPanels() {
-            document.getElementById('leftSidebar').classList.add('-translate-x-full');
             document.getElementById('rightSidebar').classList.add('translate-x-full');
             document.getElementById('sidebarOverlay').classList.add('hidden');
         }
@@ -1309,7 +1439,40 @@
             return parseFloat(str);
         }
 
-        // 종단 IP 표 파싱: 측점, 계획고, 곡선장(L) · 탭 구분
+        // 평면 IP 좌표 데이터 파싱 및 저장 (IP명, X, Y, R, A1, A2, R2) - 프로젝트 JSON에 함께 저장됨
+        function saveHorizontalIPData() {
+            const raw = document.getElementById('horizontalIPInput').value;
+            const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            let ips = [];
+            lines.forEach(line => {
+                if (line.includes('IP명') || line.includes('측점')) return;
+                const cols = line.split('\t');
+                if (cols.length < 3) return;
+                const name = cols[0].trim();
+                const x = parseFloat(cols[1]);
+                const y = parseFloat(cols[2]);
+                if (name === '' || isNaN(x) || isNaN(y)) return;
+                ips.push({
+                    name,
+                    x, y,
+                    r: cols[3] !== undefined && cols[3].trim() !== '' ? parseFloat(cols[3]) : 0,
+                    a1: cols[4] !== undefined && cols[4].trim() !== '' ? parseFloat(cols[4]) : 0,
+                    a2: cols[5] !== undefined && cols[5].trim() !== '' ? parseFloat(cols[5]) : 0,
+                    r2: cols[6] !== undefined && cols[6].trim() !== '' ? parseFloat(cols[6]) : 0
+                });
+            });
+
+            if (ips.length === 0) {
+                showToast("저장 실패", "인식 가능한 IP 좌표 데이터가 없습니다. (탭 구분: IP명, X, Y, R, A1, A2, R2)");
+                return;
+            }
+
+            horizontalIPs = ips;
+            showToast("좌표 데이터 저장 완료", `IP ${ips.length}개의 좌표 데이터가 저장되었습니다. (프로젝트 저장 시 함께 포함)`);
+        }
+
+        // 종단 IP 표 파싱: 측점, 레벨, 완화곡선길이, 구배(%) · 탭 구분
+        // 레벨이 비어있으면 이전 IP의 레벨 + 구배(%) x 거리차로 자동 계산
         function parseVerticalIPInput(raw) {
             const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             let ips = [];
@@ -1318,10 +1481,19 @@
                 const cols = line.split('\t');
                 if (cols.length < 2) return;
                 const distance = parseSTAToMeters(cols[0]);
-                const elevation = parseFloat(cols[1]);
+                const levelRaw = cols[1] !== undefined ? cols[1].trim() : '';
                 const curveLength = cols[2] !== undefined && cols[2].trim() !== '' ? parseFloat(cols[2]) : 0;
-                if (isNaN(distance) || isNaN(elevation)) return;
-                ips.push({ distance, elevation, curveLength: isNaN(curveLength) ? 0 : curveLength });
+                const gradeRaw = cols[3] !== undefined && cols[3].trim() !== '' ? parseFloat(cols[3]) : null;
+                if (isNaN(distance)) return;
+
+                let elevation = levelRaw === '' ? null : parseFloat(levelRaw);
+                if ((elevation === null || isNaN(elevation)) && gradeRaw !== null && ips.length > 0) {
+                    const prev = ips[ips.length - 1];
+                    elevation = prev.elevation + (gradeRaw / 100) * (distance - prev.distance);
+                }
+                if (elevation === null || isNaN(elevation)) return;
+
+                ips.push({ distance, elevation, curveLength: isNaN(curveLength) ? 0 : curveLength, grade: gradeRaw });
             });
             ips.sort((a, b) => a.distance - b.distance);
             return ips;
@@ -1793,9 +1965,28 @@
             document.getElementById('leftSlope').value = params.leftSlope;
             document.getElementById('rightDist').value = params.rightDist;
             document.getElementById('rightSlope').value = params.rightSlope;
+            document.getElementById('leftShoulderWidth').value = params.leftShoulderWidth || 0;
+            document.getElementById('leftShoulderSlope').value = params.leftShoulderSlope || 4.0;
+            document.getElementById('rightShoulderWidth').value = params.rightShoulderWidth || 0;
+            document.getElementById('rightShoulderSlope').value = params.rightShoulderSlope || 4.0;
+            document.getElementById('leftFillSlope').value = params.leftFillSlope || 1.5;
+            document.getElementById('leftCutSlope').value = params.leftCutSlope || 1.2;
+            document.getElementById('rightFillSlope').value = params.rightFillSlope || 1.5;
+            document.getElementById('rightCutSlope').value = params.rightCutSlope || 1.2;
             
             document.getElementById('leftCurbType').value = params.leftCurbType;
             document.getElementById('rightCurbType').value = params.rightCurbType;
+
+            const lcc = params.leftCurbCustom || { width: 150, height: 200, embed: 50 };
+            document.getElementById('leftCurbCustomWidth').value = lcc.width;
+            document.getElementById('leftCurbCustomHeight').value = lcc.height;
+            document.getElementById('leftCurbCustomEmbed').value = lcc.embed;
+
+            const rcc = params.rightCurbCustom || { width: 150, height: 200, embed: 50 };
+            document.getElementById('rightCurbCustomWidth').value = rcc.width;
+            document.getElementById('rightCurbCustomHeight').value = rcc.height;
+            document.getElementById('rightCurbCustomEmbed').value = rcc.embed;
+
             updateCurbSpecLabel('left');
             updateCurbSpecLabel('right');
             
@@ -1877,6 +2068,14 @@
                 { id: 'leftSlope', prop: 'leftSlope', type: 'float' },
                 { id: 'rightDist', prop: 'rightDist', type: 'float' },
                 { id: 'rightSlope', prop: 'rightSlope', type: 'float' },
+                { id: 'leftShoulderWidth', prop: 'leftShoulderWidth', type: 'float' },
+                { id: 'leftShoulderSlope', prop: 'leftShoulderSlope', type: 'float' },
+                { id: 'rightShoulderWidth', prop: 'rightShoulderWidth', type: 'float' },
+                { id: 'rightShoulderSlope', prop: 'rightShoulderSlope', type: 'float' },
+                { id: 'leftFillSlope', prop: 'leftFillSlope', type: 'float' },
+                { id: 'leftCutSlope', prop: 'leftCutSlope', type: 'float' },
+                { id: 'rightFillSlope', prop: 'rightFillSlope', type: 'float' },
+                { id: 'rightCutSlope', prop: 'rightCutSlope', type: 'float' },
                 { id: 'leftCurbType', prop: 'leftCurbType', type: 'string' },
                 { id: 'rightCurbType', prop: 'rightCurbType', type: 'string' },
                 { id: 'leftSidewalkActive', prop: 'leftSidewalkActive', type: 'bool' },
@@ -1977,10 +2176,42 @@
                 el.addEventListener('input', updateCustomVal);
                 el.addEventListener('change', updateCustomVal);
             });
+
+            // 사용자 지정 경계석 규격 필드 (중첩 객체 params.leftCurbCustom / rightCurbCustom)
+            const curbCustomFields = [
+                { id: 'leftCurbCustomWidth', side: 'leftCurbCustom', key: 'width' },
+                { id: 'leftCurbCustomHeight', side: 'leftCurbCustom', key: 'height' },
+                { id: 'leftCurbCustomEmbed', side: 'leftCurbCustom', key: 'embed' },
+                { id: 'rightCurbCustomWidth', side: 'rightCurbCustom', key: 'width' },
+                { id: 'rightCurbCustomHeight', side: 'rightCurbCustom', key: 'height' },
+                { id: 'rightCurbCustomEmbed', side: 'rightCurbCustom', key: 'embed' }
+            ];
+            curbCustomFields.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (!el) return;
+                const updateCustomVal = () => {
+                    let val = parseFloat(el.value);
+                    if (isNaN(val)) val = 0;
+                    if (!params[item.side]) params[item.side] = { width: 150, height: 200, embed: 50 };
+                    params[item.side][item.key] = val;
+
+                    const activeSt = stations.find(st => st.id === activeStationId);
+                    if (activeSt) activeSt.params = JSON.parse(JSON.stringify(params));
+
+                    calculateGeometry();
+                    draw();
+                };
+                el.addEventListener('input', updateCustomVal);
+                el.addEventListener('change', updateCustomVal);
+            });
         }
 
         function setupKeyboardShortcuts() {
             window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeTopModal();
+                    return;
+                }
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
                 if (e.key.toLowerCase() === 'r') {
                     resetCamera();
@@ -1989,6 +2220,15 @@
                     exportToDXF();
                 }
             });
+        }
+
+        // ESC 키 입력 시 현재 열려있는 팝업 모달을 닫음 (여러 개 열려있어도 하나씩)
+        function closeTopModal() {
+            const openModals = Array.from(document.querySelectorAll('[id^="modal"]'))
+                .filter(el => !el.classList.contains('hidden'));
+            if (openModals.length > 0) {
+                openModals[openModals.length - 1].classList.add('hidden');
+            }
         }
 
         // 캔버스 드래그 및 마우스 제어 이벤트 바인딩
@@ -2394,6 +2634,24 @@
                 });
                 curL_X = curL_X - 150;
                 curL_Y = curL_Y + 50;
+            } else if (stParams.leftCurbType === 'custom') {
+                const cc = stParams.leftCurbCustom || { width: 150, height: 200, embed: 50 };
+                const exposed = cc.height - cc.embed;
+                const points = [
+                    { x: curL_X, y: curL_Y },
+                    { x: curL_X, y: curL_Y - cc.embed },
+                    { x: curL_X - cc.width, y: curL_Y - cc.embed },
+                    { x: curL_X - cc.width, y: curL_Y + exposed },
+                    { x: curL_X, y: curL_Y + exposed }
+                ];
+                elements.push({
+                    type: 'polyline', points: points, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 2.5
+                });
+                addDimensionToElements(elements, curL_X - cc.width, curL_Y + exposed + 30, curL_X, curL_Y + exposed + 30, 0, `${cc.width}`, tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, curL_X - cc.width - 30, curL_Y - cc.embed, curL_X - cc.width - 30, curL_Y + exposed, 0, `${cc.height}`, tickLen, textSm, 'DIM_DETAIL', S);
+                curL_X = curL_X - cc.width;
+                curL_Y = curL_Y + exposed;
             }
 
             // 좌측 인도부 (보도블럭) 설치
@@ -2501,6 +2759,24 @@
                 });
                 curR_X = curR_X + 150;
                 curR_Y = curR_Y + 50;
+            } else if (stParams.rightCurbType === 'custom') {
+                const cc = stParams.rightCurbCustom || { width: 150, height: 200, embed: 50 };
+                const exposed = cc.height - cc.embed;
+                const points = [
+                    { x: curR_X, y: curR_Y },
+                    { x: curR_X, y: curR_Y - cc.embed },
+                    { x: curR_X + cc.width, y: curR_Y - cc.embed },
+                    { x: curR_X + cc.width, y: curR_Y + exposed },
+                    { x: curR_X, y: curR_Y + exposed }
+                ];
+                elements.push({
+                    type: 'polyline', points: points, closed: true,
+                    layer: 'CURB', color: '#fb923c', width: 2.5
+                });
+                addDimensionToElements(elements, curR_X, curR_Y + exposed + 30, curR_X + cc.width, curR_Y + exposed + 30, 0, `${cc.width}`, tickLen, textSm, 'DIM_DETAIL', S);
+                addDimensionToElements(elements, curR_X + cc.width + 30, curR_Y - cc.embed, curR_X + cc.width + 30, curR_Y + exposed, 0, `${cc.height}`, tickLen, textSm, 'DIM_DETAIL', S);
+                curR_X = curR_X + cc.width;
+                curR_Y = curR_Y + exposed;
             }
 
             // 우측 인도부 (보도블럭) 설치
@@ -2611,6 +2887,36 @@
                 }
             }
 
+            // 좌측 노견부 (Shoulder) - 경계석/인도부/수로관 이후, 사면 시작 직전 완충 구간
+            if (stParams.leftShoulderWidth && stParams.leftShoulderWidth > 0) {
+                const shW = stParams.leftShoulderWidth * 1000;
+                const shS = (stParams.leftShoulderSlope || 0) / 100;
+                const shEndX = curL_X - shW;
+                const shEndY = curL_Y + (shW * shS);
+                elements.push({
+                    type: 'line', x1: curL_X, y1: curL_Y, x2: shEndX, y2: shEndY,
+                    layer: 'SHOULDER', color: '#a8a29e', width: 2.0
+                });
+                addDimensionToElements(elements, shEndX, shEndY, curL_X, curL_Y, dimOffsetInner + 5 * S, `노견 B=${stParams.leftShoulderWidth.toFixed(1)}m`, tickLen, textSm, 'SHOULDER', S);
+                curL_X = shEndX;
+                curL_Y = shEndY;
+            }
+
+            // 우측 노견부 (Shoulder) - 경계석/인도부/수로관 이후, 사면 시작 직전 완충 구간
+            if (stParams.rightShoulderWidth && stParams.rightShoulderWidth > 0) {
+                const shW = stParams.rightShoulderWidth * 1000;
+                const shS = (stParams.rightShoulderSlope || 0) / 100;
+                const shEndX = curR_X + shW;
+                const shEndY = curR_Y + (shW * shS);
+                elements.push({
+                    type: 'line', x1: curR_X, y1: curR_Y, x2: shEndX, y2: shEndY,
+                    layer: 'SHOULDER', color: '#a8a29e', width: 2.0
+                });
+                addDimensionToElements(elements, curR_X, curR_Y, shEndX, shEndY, dimOffsetInner + 5 * S, `노견 B=${stParams.rightShoulderWidth.toFixed(1)}m`, tickLen, textSm, 'SHOULDER', S);
+                curR_X = shEndX;
+                curR_Y = shEndY;
+            }
+
             // 5-1. 계획고 FH 대비 원지반 GH 표출 및 법면 사면 라인 매핑
             const planElev = stParams.planHeight || 10.00;
             const groundElev = stParams.groundHeight || 9.30;
@@ -2639,13 +2945,15 @@
             const groundY_L = CL_GroundY + curL_X * groundSl;
             let slopeL_X = curL_X;
             let slopeL_Y = curL_Y;
+            const leftFillRatio = stParams.leftFillSlope || 1.5;
+            const leftCutRatio = stParams.leftCutSlope || 1.2;
 
             if (curL_Y > groundY_L) {
-                // 성토 (Fill, 1:1.5 slope) -> 좌측 아래로 내려감. dy/dx = 1/1.5
-                // Y - curL_Y = (1/1.5) * (X - curL_X).
+                // 성토 (Fill) -> 좌측 아래로 내려감. dy/dx = 1/N
+                // Y - curL_Y = (1/N) * (X - curL_X).
                 // 원지반선: Y = CL_GroundY + X * groundSl.
                 // intersection X:
-                const S_s = 1.0 / 1.5;
+                const S_s = 1.0 / leftFillRatio;
                 const C_s = curL_Y - S_s * curL_X;
                 const C_g = CL_GroundY;
                 const S_g = groundSl;
@@ -2660,15 +2968,15 @@
                     });
                     elements.push({
                         type: 'text', x: (curL_X + intX)/2, y: (curL_Y + intY)/2 + 4 * S,
-                        text: "성토사면 1:1.5", size: textSm * 0.8, align: 'center',
+                        text: `성토사면 1:${leftFillRatio}`, size: textSm * 0.8, align: 'center',
                         layer: 'GROUND', color: '#eab308'
                     });
                     slopeL_X = intX;
                     slopeL_Y = intY;
                 }
             } else {
-                // 절토 (Cut, 1:1.2 slope) -> 좌측 위로 올라감. dy/dx = -1/1.2
-                const S_s = -1.0 / 1.2;
+                // 절토 (Cut) -> 좌측 위로 올라감. dy/dx = -1/N
+                const S_s = -1.0 / leftCutRatio;
                 const C_s = curL_Y - S_s * curL_X;
                 const C_g = CL_GroundY;
                 const S_g = groundSl;
@@ -2683,7 +2991,7 @@
                     });
                     elements.push({
                         type: 'text', x: (curL_X + intX)/2, y: (curL_Y + intY)/2 + 4 * S,
-                        text: "절토사면 1:1.2", size: textSm * 0.8, align: 'center',
+                        text: `절토사면 1:${leftCutRatio}`, size: textSm * 0.8, align: 'center',
                         layer: 'GROUND', color: '#f87171'
                     });
                     slopeL_X = intX;
@@ -2695,10 +3003,12 @@
             const groundY_R = CL_GroundY + curR_X * groundSl;
             let slopeR_X = curR_X;
             let slopeR_Y = curR_Y;
+            const rightFillRatio = stParams.rightFillSlope || 1.5;
+            const rightCutRatio = stParams.rightCutSlope || 1.2;
 
             if (curR_Y > groundY_R) {
-                // 성토 (Fill, 1:1.5 slope) -> 우측 아래로 내려감. dy/dx = -1/1.5
-                const S_s = -1.0 / 1.5;
+                // 성토 (Fill) -> 우측 아래로 내려감. dy/dx = -1/N
+                const S_s = -1.0 / rightFillRatio;
                 const C_s = curR_Y - S_s * curR_X;
                 const C_g = CL_GroundY;
                 const S_g = groundSl;
@@ -2713,15 +3023,15 @@
                     });
                     elements.push({
                         type: 'text', x: (curR_X + intX)/2, y: (curR_Y + intY)/2 + 4 * S,
-                        text: "성토사면 1:1.5", size: textSm * 0.8, align: 'center',
+                        text: `성토사면 1:${rightFillRatio}`, size: textSm * 0.8, align: 'center',
                         layer: 'GROUND', color: '#eab308'
                     });
                     slopeR_X = intX;
                     slopeR_Y = intY;
                 }
             } else {
-                // 절토 (Cut, 1:1.2) -> 우측 위로 올라감. dy/dx = 1/1.2
-                const S_s = 1.0 / 1.2;
+                // 절토 (Cut) -> 우측 위로 올라감. dy/dx = 1/N
+                const S_s = 1.0 / rightCutRatio;
                 const C_s = curR_Y - S_s * curR_X;
                 const C_g = CL_GroundY;
                 const S_g = groundSl;
@@ -2736,7 +3046,7 @@
                     });
                     elements.push({
                         type: 'text', x: (curR_X + intX)/2, y: (curR_Y + intY)/2 + 4 * S,
-                        text: "절토사면 1:1.2", size: textSm * 0.8, align: 'center',
+                        text: `절토사면 1:${rightCutRatio}`, size: textSm * 0.8, align: 'center',
                         layer: 'GROUND', color: '#f87171'
                     });
                     slopeR_X = intX;
